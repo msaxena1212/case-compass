@@ -9,6 +9,11 @@ import {
   BookOpen,
   CheckSquare,
   Scale,
+  Bell,
+  Bot,
+  Building2,
+  ShieldCheck,
+  Plug,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -37,11 +42,19 @@ const managementNav = [
   { title: "Documents", url: "/documents", icon: FileText },
   { title: "Billing", url: "/billing", icon: DollarSign },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
+  { title: "Notifications", url: "/notifications", icon: Bell },
+  { title: "Contracts", url: "/contracts", icon: FileText },
+  { title: "Firm Management", url: "/firm", icon: Building2 },
+  { title: "Security Center", url: "/security", icon: ShieldCheck },
+  { title: "Integration Hub", url: "/integrations", icon: Plug },
 ];
 
 const insightsNav = [
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Knowledge Base", url: "/knowledge", icon: BookOpen },
+  { title: "AI Assistant", url: "/ai-assistant", icon: Bot },
+  { title: "Court Tracker", url: "/court-tracker", icon: Scale },
+  { title: "Reporting", url: "/reports", icon: BarChart3 },
 ];
 
 export function AppSidebar() {

@@ -1,33 +1,60 @@
 import { AppLayout } from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, Briefcase } from "lucide-react";
-import { useState } from "react";
-
-const casesData = [
-  { id: "C-2024-0847", title: "Sharma vs. State of Maharashtra", type: "Criminal", status: "Hearing", client: "Rajesh Sharma", court: "Mumbai High Court", filed: "Jan 15, 2024", nextDate: "Mar 20, 2026", lawyer: "Adv. Kumar" },
-  { id: "C-2024-0846", title: "Patel Industries Ltd. Merger", type: "Corporate", status: "Active", client: "Patel Industries", court: "NCLT Mumbai", filed: "Feb 10, 2024", nextDate: "Mar 22, 2026", lawyer: "Adv. Mehta" },
-  { id: "C-2024-0845", title: "Singh Property Dispute", type: "Civil", status: "Filed", client: "Harpreet Singh", court: "District Court Pune", filed: "Mar 1, 2024", nextDate: "Mar 25, 2026", lawyer: "Adv. Kumar" },
-  { id: "C-2024-0844", title: "Gupta vs. Gupta Divorce", type: "Family", status: "Pending", client: "Anita Gupta", court: "Family Court Mumbai", filed: "Dec 20, 2023", nextDate: "Apr 5, 2026", lawyer: "Adv. Joshi" },
-  { id: "C-2024-0843", title: "Tech Solutions IP Infringement", type: "Corporate", status: "Active", client: "Tech Solutions Pvt Ltd", court: "Delhi High Court", filed: "Nov 5, 2023", nextDate: "Mar 28, 2026", lawyer: "Adv. Kumar" },
-  { id: "C-2024-0842", title: "Municipal Corp Land Acquisition", type: "Civil", status: "Hearing", client: "Residents Association", court: "High Court Bombay", filed: "Oct 12, 2023", nextDate: "Apr 1, 2026", lawyer: "Adv. Mehta" },
-  { id: "C-2024-0841", title: "Desai Insurance Claim", type: "Civil", status: "Closed", client: "Vikram Desai", court: "Consumer Court", filed: "Aug 8, 2023", nextDate: "-", lawyer: "Adv. Joshi" },
-  { id: "C-2024-0840", title: "Reddy Tax Evasion Defense", type: "Criminal", status: "Active", client: "Suresh Reddy", court: "Income Tax Tribunal", filed: "Sep 30, 2023", nextDate: "Apr 10, 2026", lawyer: "Adv. Kumar" },
-];
+import { Search, Plus, Briefcase, Activity, Loader2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { caseService } from "@/services/caseService";
+import { clientService } from "@/services/clientService";
+import { calculateHealthScore } from "@/store/mockData";
 
 const typeFilters = ["All", "Civil", "Criminal", "Corporate", "Family"];
 
 export default function Cases() {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
+  const navigate = useNavigate();
 
-  const filtered = casesData.filter((c) => {
+  const { data: rawCases = [], isLoading: loadingCases } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases
+  });
+
+  const { data: clients = [], isLoading: loadingClients } = useQuery({
+    queryKey: ['clients'],
+    queryFn: clientService.getAllClients
+  });
+
+  const isLoading = loadingCases || loadingClients;
+
+  const casesData = useMemo(() => rawCases.map(c => {
+    const client = clients.find(cli => cli.id === c.clientId);
+    return {
+      ...c,
+      clientName: client?.name || "Unknown",
+      healthScore: calculateHealthScore(c)
+    };
+  }), [rawCases, clients]);
+
+  const filtered = useMemo(() => casesData.filter((c) => {
     const matchSearch = c.title.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase());
     const matchType = activeFilter === "All" || c.type === activeFilter;
     return matchSearch && matchType;
-  });
+  }), [casesData, search, activeFilter]);
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Loading Cases...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -35,9 +62,12 @@ export default function Cases() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-display font-semibold tracking-tight">Cases</h1>
-            <p className="text-sm text-muted-foreground mt-1">{casesData.length} total cases · {casesData.filter(c => c.status !== "Closed").length} active</p>
+            <p className="text-sm text-muted-foreground mt-1">{casesData.length} total cases · {casesData.filter(c => c.status !== "Lost" && c.status !== "Won" && c.status !== "Settled" && c.status !== "Withdrawn").length} active</p>
           </div>
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0">
+          <Button 
+            onClick={() => navigate("/cases/new")}
+            className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0"
+          >
             <Plus className="h-4 w-4" /> New Case
           </Button>
         </div>
@@ -78,28 +108,36 @@ export default function Cases() {
               <div className="col-span-1">Type</div>
               <div className="col-span-2">Client</div>
               <div className="col-span-2">Court</div>
-              <div className="col-span-1">Next Date</div>
+              <div className="col-span-1">Filed Date</div>
+              <div className="col-span-1">Health</div>
               <div className="col-span-1">Status</div>
-              <div className="col-span-1">Lawyer</div>
             </div>
 
             <div className="divide-y">
               {filtered.map((c) => (
-                <div key={c.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer items-center">
-                  <div className="col-span-1 text-xs font-mono text-muted-foreground">{c.id}</div>
+                <div 
+                  key={c.id} 
+                  onClick={() => navigate(`/cases/${c.id}`)}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer items-center"
+                >
+                  <div className="col-span-1 text-xs font-mono text-muted-foreground">{c.id.split("_")[1] || c.id}</div>
                   <div className="col-span-3">
-                    <p className="text-sm font-medium">{c.title}</p>
+                    <p className="text-sm font-medium truncate">{c.title}</p>
+                    {c.caseNumber && <p className="text-xs text-muted-foreground">{c.caseNumber}</p>}
                   </div>
                   <div className="col-span-1">
                     <span className="text-xs text-muted-foreground">{c.type}</span>
                   </div>
-                  <div className="col-span-2 text-sm">{c.client}</div>
-                  <div className="col-span-2 text-xs text-muted-foreground">{c.court}</div>
-                  <div className="col-span-1 text-xs">{c.nextDate}</div>
-                  <div className="col-span-1">
+                  <div className="col-span-2 text-sm truncate">{c.clientName}</div>
+                  <div className="col-span-2 text-xs text-muted-foreground truncate">{c.court}</div>
+                  <div className="col-span-1 text-xs truncate">{new Date(c.filingDate).toLocaleDateString()}</div>
+                  <div className="col-span-1 flex items-center gap-1 text-xs">
+                    <Activity className={`h-3 w-3 ${c.healthScore > 80 ? 'text-green-500' : c.healthScore > 50 ? 'text-yellow-500' : 'text-red-500'}`} />
+                    <span>{c.healthScore}%</span>
+                  </div>
+                  <div className="col-span-1 flex items-center">
                     <StatusBadge status={c.status} />
                   </div>
-                  <div className="col-span-1 text-xs text-muted-foreground">{c.lawyer}</div>
                 </div>
               ))}
             </div>

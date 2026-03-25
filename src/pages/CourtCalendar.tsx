@@ -1,146 +1,214 @@
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/StatusBadge";
-import { Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar as CalendarIcon, Clock, MapPin, Search, AlertTriangle } from "lucide-react";
+import { mockHearings } from "@/store/mockData";
 import { useState } from "react";
-
-const hearings = [
-  { id: 1, case: "Sharma vs. State of Maharashtra", caseId: "C-2024-0847", court: "Mumbai High Court", courtRoom: "Room 12", date: "2026-03-20", time: "10:30 AM", judge: "Hon. Justice Desai", type: "Final Hearing", status: "urgent" },
-  { id: 2, case: "Patel Industries Ltd. Merger", caseId: "C-2024-0846", court: "NCLT Mumbai", courtRoom: "Room 5", date: "2026-03-22", time: "2:00 PM", judge: "Hon. Member Rao", type: "Arguments", status: "active" },
-  { id: 3, case: "Singh Property Dispute", caseId: "C-2024-0845", court: "District Court Pune", courtRoom: "Room 3", date: "2026-03-25", time: "11:00 AM", judge: "Hon. Judge Verma", type: "Evidence", status: "active" },
-  { id: 4, case: "Municipal Corp Land Acquisition", caseId: "C-2024-0842", court: "High Court Bombay", courtRoom: "Room 7", date: "2026-04-01", time: "10:00 AM", judge: "Hon. Justice Patel", type: "Admission", status: "pending" },
-  { id: 5, case: "Reddy Tax Evasion Defense", caseId: "C-2024-0840", court: "Income Tax Tribunal", courtRoom: "Room 2", date: "2026-04-10", time: "3:30 PM", judge: "Hon. Member Shah", type: "Cross Examination", status: "active" },
-  { id: 6, case: "Gupta vs. Gupta Divorce", caseId: "C-2024-0844", court: "Family Court Mumbai", courtRoom: "Room 1", date: "2026-04-05", time: "11:30 AM", judge: "Hon. Judge Iyer", type: "Mediation", status: "pending" },
-];
-
-const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
-const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { CreateHearingModal } from "@/components/CreateHearingModal";
+import { UpdateHearingModal } from "@/components/UpdateHearingModal";
 
 export default function CourtCalendar() {
-  const [currentMonth, setCurrentMonth] = useState(2); // March
-  const [currentYear, setCurrentYear] = useState(2026);
-
-  const days = daysInMonth(currentYear, currentMonth);
-  const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
-  const hearingDates = hearings.map((h) => {
-    const d = new Date(h.date);
-    return { ...h, day: d.getDate(), month: d.getMonth(), year: d.getFullYear() };
-  });
-
-  const getHearingsForDay = (day: number) =>
-    hearingDates.filter((h) => h.day === day && h.month === currentMonth && h.year === currentYear);
-
-  const prevMonth = () => {
-    if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); }
-    else setCurrentMonth(currentMonth - 1);
+  const [search, setSearch] = useState("");
+  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [updateHearingId, setUpdateHearingId] = useState<string | null>(null);
+  
+  // Sort hearings by date
+  const sortedHearings = [...mockHearings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  const today = new Date().toDateString();
+  const todaysHearings = sortedHearings.filter(h => new Date(h.date).toDateString() === today);
+  const upcomingHearings = sortedHearings.filter(h => new Date(h.date).getTime() > new Date().getTime() && new Date(h.date).toDateString() !== today);
+  
+  const renderHearingCard = (h: any) => {
+    const hearingDate = new Date(h.date);
+    const timeString = hearingDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateString = hearingDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    
+    return (
+      <Card key={h.id} className="mb-4 hover:shadow-md transition-shadow">
+        <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="bg-primary/10 text-primary rounded-lg p-3 text-center min-w-20">
+              <p className="text-xs font-semibold uppercase">{hearingDate.toLocaleDateString('en-US', { month: 'short' })}</p>
+              <p className="text-xl font-bold font-display">{hearingDate.getDate()}</p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                  h.status === 'Upcoming' ? 'bg-blue-100 text-blue-700' :
+                  h.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                  h.status === 'Adjourned' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-red-100 text-red-700'
+                }`}>
+                  {h.status}
+                </span>
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{h.stage}</span>
+              </div>
+              <h3 className="font-semibold text-base">{h.title}</h3>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>{timeString}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span>{h.court}</span>
+                </div>
+                {h.conflictWarning && (
+                  <div className="flex items-center gap-1 text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Conflict Risk
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex flex-row md:flex-col gap-2 shrink-0 border-t md:border-t-0 pt-4 md:pt-0">
+            <Button variant="outline" size="sm" className="w-full">View Case</Button>
+            {h.status === 'Upcoming' && (
+              <Button size="sm" className="w-full" onClick={() => setUpdateHearingId(h.id)}>
+                Update Outcome
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
-  const nextMonth = () => {
-    if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); }
-    else setCurrentMonth(currentMonth + 1);
-  };
 
-  const upcomingHearings = hearings
-    .filter((h) => new Date(h.date) >= new Date("2026-03-17"))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const currentHearings = search ? sortedHearings.filter(h => 
+    h.title.toLowerCase().includes(search.toLowerCase()) || 
+    h.court.toLowerCase().includes(search.toLowerCase())
+  ) : sortedHearings;
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-display font-semibold tracking-tight">Court Calendar</h1>
-          <p className="text-sm text-muted-foreground mt-1">Track hearings, filing dates, and court schedules</p>
+      <div className="space-y-6 max-w-5xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-display font-semibold tracking-tight">Court Calendar</h1>
+            <p className="text-sm text-muted-foreground mt-1">Track your schedules, hearings, and deadlines.</p>
+          </div>
+          <Button 
+            className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            <CalendarIcon className="h-4 w-4" /> Add Hearing
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Calendar */}
-          <Card className="lg:col-span-2">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="text-base font-body font-medium">
-                {monthNames[currentMonth]} {currentYear}
-              </CardTitle>
-              <div className="flex gap-1">
-                <button onClick={prevMonth} className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted transition-colors">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button onClick={nextMonth} className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted transition-colors">
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-7 gap-px">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                  <div key={d} className="text-center text-xs font-medium text-muted-foreground py-2">{d}</div>
-                ))}
-                {Array.from({ length: firstDay }).map((_, i) => (
-                  <div key={`empty-${i}`} className="h-20" />
-                ))}
-                {Array.from({ length: days }).map((_, i) => {
-                  const day = i + 1;
-                  const dayHearings = getHearingsForDay(day);
-                  const isToday = day === 17 && currentMonth === 2 && currentYear === 2026;
-                  return (
-                    <div
-                      key={day}
-                      className={`h-20 p-1.5 border border-border/50 rounded-md hover:bg-muted/30 transition-colors ${isToday ? "bg-accent/10 border-accent/30" : ""}`}
-                    >
-                      <span className={`text-xs font-medium ${isToday ? "text-accent font-bold" : ""}`}>{day}</span>
-                      {dayHearings.map((h) => (
-                        <div key={h.id} className="mt-0.5 px-1 py-0.5 bg-primary/10 rounded text-[10px] truncate text-primary font-medium">
-                          {h.time} · {h.case.split(" ")[0]}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+        <CreateHearingModal 
+          isOpen={isCreateModalOpen} 
+          onClose={() => setIsCreateModalOpen(false)} 
+        />
 
-          {/* Upcoming Hearings List */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-body font-medium">Upcoming Hearings</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y max-h-[600px] overflow-y-auto">
-                {upcomingHearings.map((h) => {
-                  const d = new Date(h.date);
-                  return (
-                    <div key={h.id} className="px-5 py-4 hover:bg-muted/30 transition-colors">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="text-sm font-medium leading-tight">{h.case}</p>
-                        <StatusBadge status={h.status} />
-                      </div>
-                      <p className="text-xs text-muted-foreground font-mono mb-2">{h.caseId}</p>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <CalendarIcon className="h-3 w-3" />
-                          {d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                          <Clock className="h-3 w-3 ml-2" />
-                          {h.time}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          {h.court} · {h.courtRoom}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <User className="h-3 w-3" />
-                          {h.judge}
-                        </div>
-                      </div>
-                      <div className="mt-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
-                          {h.type}
-                        </span>
-                      </div>
+        <UpdateHearingModal 
+          isOpen={!!updateHearingId} 
+          onClose={() => setUpdateHearingId(null)} 
+          hearingId={updateHearingId}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search hearings by case or court..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 bg-white"
+              />
+            </div>
+
+            {!search && (
+              <>
+                <section>
+                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                    Today's Hearings ({todaysHearings.length})
+                  </h2>
+                  {todaysHearings.length > 0 ? (
+                    todaysHearings.map(renderHearingCard)
+                  ) : (
+                    <div className="text-center py-8 bg-muted/30 rounded-lg border border-dashed">
+                      <p className="text-muted-foreground">No hearings scheduled for today.</p>
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+                  )}
+                </section>
+
+                <section>
+                  <h2 className="text-lg font-semibold mb-4 mt-8">Upcoming Hearings ({upcomingHearings.length})</h2>
+                  {upcomingHearings.length > 0 ? (
+                    upcomingHearings.map(renderHearingCard)
+                  ) : (
+                    <div className="text-center py-8 bg-muted/30 rounded-lg border border-dashed">
+                      <p className="text-muted-foreground">No upcoming hearings scheduled.</p>
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+
+            {search && (
+               <section>
+                 <h2 className="text-lg font-semibold mb-4">Search Results ({currentHearings.length})</h2>
+                 {currentHearings.map(renderHearingCard)}
+               </section>
+            )}
+          </div>
+          
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Mini Calendar</CardTitle>
+              </CardHeader>
+              <CardContent className="flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  className="rounded-md border shadow"
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="border-blue-200 bg-blue-50/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-blue-800 flex items-center justify-between">
+                  Smart Insights 
+                  <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">Engine Active</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="text-sm space-y-3 text-blue-900/80">
+                  <li className="flex gap-2">
+                    <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                    <p>You have <strong>{todaysHearings.length}</strong> hearings today.</p>
+                  </li>
+                  {todaysHearings.length > 0 && (
+                    <li className="flex gap-2">
+                      <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                      <p>First hearing is at <strong>{new Date(todaysHearings[0].date).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</strong>. Traffic is light; leave by <strong>{new Date(new Date(todaysHearings[0].date).getTime() - 45*60000).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</strong> for a safe buffer.</p>
+                    </li>
+                  )}
+                  {sortedHearings.some(h => h.conflictWarning) && (
+                     <li className="flex gap-2 text-amber-700 font-medium">
+                       <AlertTriangle className="h-4 w-4 shrink-0" />
+                       <p>You have a potential scheduling clash identified.</p>
+                     </li>
+                  )}
+                  <li className="flex gap-2 text-blue-700/80">
+                      <Clock className="h-4 w-4 shrink-0" />
+                      <p className="text-xs">Reminders for clients are automated at T-3 days and T-1 day via WhatsApp.</p>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </AppLayout>

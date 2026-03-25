@@ -2,87 +2,198 @@ import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Phone, Mail, Briefcase, MoreHorizontal } from "lucide-react";
-import { useState } from "react";
-
-const clients = [
-  { id: 1, name: "Rajesh Sharma", email: "rajesh@email.com", phone: "+91 98765 43210", type: "Individual", activeCases: 1, totalCases: 3, since: "2022", avatar: "RS" },
-  { id: 2, name: "Patel Industries Ltd.", email: "legal@patelindustries.com", phone: "+91 22 2345 6789", type: "Corporate", activeCases: 1, totalCases: 2, since: "2023", avatar: "PI" },
-  { id: 3, name: "Harpreet Singh", email: "harpreet.s@email.com", phone: "+91 87654 32109", type: "Individual", activeCases: 1, totalCases: 1, since: "2024", avatar: "HS" },
-  { id: 4, name: "Anita Gupta", email: "anita.gupta@email.com", phone: "+91 76543 21098", type: "Individual", activeCases: 1, totalCases: 2, since: "2023", avatar: "AG" },
-  { id: 5, name: "Tech Solutions Pvt Ltd", email: "legal@techsolutions.in", phone: "+91 11 4567 8901", type: "Corporate", activeCases: 1, totalCases: 4, since: "2021", avatar: "TS" },
-  { id: 6, name: "Residents Association Andheri", email: "secretary@raandheri.org", phone: "+91 22 3456 7890", type: "Association", activeCases: 1, totalCases: 1, since: "2023", avatar: "RA" },
-  { id: 7, name: "Vikram Desai", email: "vikram.d@email.com", phone: "+91 65432 10987", type: "Individual", activeCases: 0, totalCases: 1, since: "2023", avatar: "VD" },
-  { id: 8, name: "Suresh Reddy", email: "suresh.r@email.com", phone: "+91 54321 09876", type: "Individual", activeCases: 1, totalCases: 2, since: "2023", avatar: "SR" },
-];
+import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
+import { 
+  Search, Plus, Phone, Mail, Briefcase, 
+  MoreHorizontal, Users, Shield, ArrowUpRight,
+  Activity, Tag, Loader2
+} from "lucide-react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { clientService } from "@/services/clientService";
+import { AddClientModal } from "@/components/AddClientModal";
 
 export default function Clients() {
   const [search, setSearch] = useState("");
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [activeType, setActiveType] = useState<string>('All');
+  const navigate = useNavigate();
 
-  const filtered = clients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const { data: clients = [], isLoading } = useQuery({
+    queryKey: ['clients'],
+    queryFn: clientService.getAllClients
+  });
+
+  const filtered = useMemo(() => {
+    let result = clients;
+    if (activeType !== 'All') {
+      result = result.filter(c => c.type === activeType);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(c => 
+        c.name.toLowerCase().includes(q) || 
+        c.email.toLowerCase().includes(q) ||
+        c.phone.includes(q) ||
+        (c.tags && c.tags.some(t => t.toLowerCase().includes(q)))
+      );
+    }
+    return result;
+  }, [search, activeType, clients]);
+
+  const stats = useMemo(() => ({
+    total: clients.length,
+    active: clients.filter(c => c.status === 'Active' || c.status === 'VIP').length,
+    corporate: clients.filter(c => c.type === 'Corporate').length,
+    outstanding: clients.reduce((sum, c) => sum + (c.outstandingAmount || 0), 0)
+  }), [clients]);
+
+  const getHealthColor = (score: number) => {
+    if (score >= 80) return "text-green-600 bg-green-50";
+    if (score >= 60) return "text-amber-600 bg-amber-50";
+    return "text-red-600 bg-red-50";
+  };
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Loading Clients...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-display font-semibold tracking-tight">Clients</h1>
-            <p className="text-sm text-muted-foreground mt-1">{clients.length} total clients · {clients.filter(c => c.activeCases > 0).length} with active cases</p>
+            <h1 className="text-2xl font-display font-semibold tracking-tight">Client CRM</h1>
+            <p className="text-sm text-muted-foreground mt-1">Know your clients better than your memory</p>
           </div>
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0">
-            <Plus className="h-4 w-4" /> Add Client
+          <Button onClick={() => setAddModalOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0">
+            <Plus className="h-4 w-4" /> Onboard Client
           </Button>
         </div>
 
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search clients..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Clients', value: stats.total, icon: Users, color: 'text-blue-600 bg-blue-50' },
+            { label: 'Active', value: stats.active, icon: Activity, color: 'text-emerald-600 bg-emerald-50' },
+            { label: 'Corporate', value: stats.corporate, icon: Briefcase, color: 'text-purple-600 bg-purple-50' },
+            { label: 'Outstanding Dues', value: `₹${(stats.outstanding/1000).toFixed(0)}k`, icon: ArrowUpRight, color: 'text-amber-600 bg-amber-50' },
+          ].map(stat => (
+            <Card key={stat.label} className="p-4 border-border/60 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${stat.color}`}>
+                  <stat.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{stat.label}</p>
+                  <p className="text-xl font-display font-bold leading-none mt-1">{stat.value}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((client) => (
-            <Card key={client.id} className="hover:shadow-md transition-shadow cursor-pointer group">
-              <CardContent className="p-5">
+        {/* Search & Filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search by name, email, phone, or tags..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <div className="flex gap-2 overflow-x-auto">
+            {['All', 'Individual', 'Corporate', 'Association'].map(type => (
+              <Button
+                key={type}
+                variant={activeType === type ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveType(type)}
+                className={`text-xs ${activeType === type ? 'bg-primary text-primary-foreground' : ''}`}
+              >
+                {type}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Client Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filtered.map(client => (
+            <Card 
+              key={client.id} 
+              className="hover:shadow-md transition-shadow cursor-pointer group flex flex-col h-full border-border/60"
+              onClick={() => navigate(`/clients/${client.id}`)}
+            >
+              <CardContent className="p-5 flex-1 flex flex-col">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-sm font-medium text-primary-foreground shrink-0">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-display font-bold text-primary shrink-0">
                       {client.avatar}
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold">{client.name}</h3>
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{client.type} · Since {client.since}</span>
+                      <h3 className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors">{client.name}</h3>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{client.type}</span>
+                        {client.status === 'VIP' && <span className="text-[8px] bg-gradient-to-r from-amber-500 to-yellow-500 text-white px-1 py-0.5 rounded font-bold">VIP</span>}
+                      </div>
                     </div>
                   </div>
-                  <button className="opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 rounded flex items-center justify-center hover:bg-muted">
-                    <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Mail className="h-3 w-3" /> {client.email}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Phone className="h-3 w-3" /> {client.phone}
+                  <div className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${getHealthColor(client.healthScore)}`} title="Client Health Score">
+                    {client.healthScore}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 pt-3 border-t">
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <Briefcase className="h-3 w-3 text-accent" />
-                    <span className="font-medium">{client.activeCases}</span>
-                    <span className="text-muted-foreground">active</span>
+                <div className="space-y-2 mb-4 flex-1">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Mail className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{client.email}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {client.totalCases} total cases
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Phone className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{client.phone}</span>
+                  </div>
+                  {client.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {client.tags.slice(0, 3).map(tag => (
+                        <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t text-xs">
+                  <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                    <Briefcase className="h-3 w-3 text-primary" />
+                    <span>{client.linkedCaseIds?.length || 0} Cases</span>
+                  </div>
+                  <div className="font-medium text-muted-foreground flex items-center gap-1">
+                    <Activity className="h-3 w-3" /> Since {client.since}
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <Users className="h-8 w-8 mb-2 opacity-40" />
+            <p className="text-sm">No clients found</p>
+            <p className="text-xs mt-1">Try adjusting your search or filters</p>
+          </div>
+        )}
+
+        <AddClientModal 
+          isOpen={addModalOpen}
+          onClose={() => setAddModalOpen(false)}
+        />
       </div>
     </AppLayout>
   );

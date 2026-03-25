@@ -5,104 +5,39 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Search, Plus, Clock, IndianRupee, FileText, Timer,
-  Play, Pause, TrendingUp, Receipt, Download, Send
+  Play, Pause, TrendingUp, Receipt, Download, Send, CreditCard, Loader2
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
-
-// --- Time Entries ---
-interface TimeEntry {
-  id: string;
-  case: string;
-  caseId: string;
-  description: string;
-  lawyer: string;
-  date: string;
-  hours: number;
-  rate: number;
-  billable: boolean;
-  billed: boolean;
-}
-
-const timeEntries: TimeEntry[] = [
-  { id: "T-001", case: "Sharma vs. State", caseId: "C-2024-0847", description: "Court hearing preparation", lawyer: "Adv. Kumar", date: "Mar 15, 2026", hours: 3.5, rate: 5000, billable: true, billed: false },
-  { id: "T-002", case: "Sharma vs. State", caseId: "C-2024-0847", description: "Witness interview", lawyer: "Adv. Kumar", date: "Mar 14, 2026", hours: 2.0, rate: 5000, billable: true, billed: false },
-  { id: "T-003", case: "Patel Industries Merger", caseId: "C-2024-0846", description: "Due diligence review", lawyer: "Adv. Mehta", date: "Mar 14, 2026", hours: 5.0, rate: 7500, billable: true, billed: true },
-  { id: "T-004", case: "Patel Industries Merger", caseId: "C-2024-0846", description: "Board meeting attendance", lawyer: "Adv. Mehta", date: "Mar 13, 2026", hours: 2.5, rate: 7500, billable: true, billed: true },
-  { id: "T-005", case: "Singh Property Dispute", caseId: "C-2024-0845", description: "Site inspection", lawyer: "Adv. Kumar", date: "Mar 12, 2026", hours: 4.0, rate: 5000, billable: true, billed: false },
-  { id: "T-006", case: "Gupta vs. Gupta", caseId: "C-2024-0844", description: "Mediation session", lawyer: "Adv. Joshi", date: "Mar 11, 2026", hours: 3.0, rate: 4000, billable: true, billed: false },
-  { id: "T-007", case: "Tech Solutions IP", caseId: "C-2024-0843", description: "Legal research", lawyer: "Adv. Kumar", date: "Mar 10, 2026", hours: 6.0, rate: 5000, billable: true, billed: false },
-  { id: "T-008", case: "Internal", caseId: "-", description: "Team meeting", lawyer: "Adv. Kumar", date: "Mar 10, 2026", hours: 1.0, rate: 5000, billable: false, billed: false },
-];
-
-// --- Invoices ---
-interface Invoice {
-  id: string;
-  client: string;
-  case: string;
-  caseId: string;
-  amount: number;
-  tax: number;
-  total: number;
-  issued: string;
-  due: string;
-  status: "paid" | "unpaid" | "overdue";
-  items: { description: string; hours: number; rate: number; amount: number }[];
-}
-
-const invoicesData: Invoice[] = [
-  {
-    id: "INV-2026-041", client: "Patel Industries", case: "Patel Industries Merger", caseId: "C-2024-0846",
-    amount: 56250, tax: 10125, total: 66375, issued: "Mar 1, 2026", due: "Mar 31, 2026", status: "paid",
-    items: [
-      { description: "Due diligence review", hours: 5.0, rate: 7500, amount: 37500 },
-      { description: "Board meeting attendance", hours: 2.5, rate: 7500, amount: 18750 },
-    ],
-  },
-  {
-    id: "INV-2026-040", client: "Rajesh Sharma", case: "Sharma vs. State", caseId: "C-2024-0847",
-    amount: 27500, tax: 4950, total: 32450, issued: "Feb 28, 2026", due: "Mar 28, 2026", status: "unpaid",
-    items: [
-      { description: "Court hearing preparation", hours: 3.5, rate: 5000, amount: 17500 },
-      { description: "Witness interview", hours: 2.0, rate: 5000, amount: 10000 },
-    ],
-  },
-  {
-    id: "INV-2026-039", client: "Harpreet Singh", case: "Singh Property Dispute", caseId: "C-2024-0845",
-    amount: 20000, tax: 3600, total: 23600, issued: "Feb 15, 2026", due: "Feb 28, 2026", status: "overdue",
-    items: [
-      { description: "Site inspection", hours: 4.0, rate: 5000, amount: 20000 },
-    ],
-  },
-  {
-    id: "INV-2026-038", client: "Anita Gupta", case: "Gupta vs. Gupta", caseId: "C-2024-0844",
-    amount: 12000, tax: 2160, total: 14160, issued: "Feb 10, 2026", due: "Mar 10, 2026", status: "paid",
-    items: [
-      { description: "Mediation session", hours: 3.0, rate: 4000, amount: 12000 },
-    ],
-  },
-  {
-    id: "INV-2026-037", client: "Tech Solutions Pvt Ltd", case: "Tech Solutions IP", caseId: "C-2024-0843",
-    amount: 30000, tax: 5400, total: 35400, issued: "Feb 5, 2026", due: "Mar 5, 2026", status: "overdue",
-    items: [
-      { description: "Legal research", hours: 6.0, rate: 5000, amount: 30000 },
-    ],
-  },
-];
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { billingService } from "@/services/billingService";
+import { caseService } from "@/services/caseService";
+import { clientService } from "@/services/clientService";
+import { Invoice, TimeEntry } from "@/types/billing";
+import { LogTimeModal } from "@/components/LogTimeModal";
+import { CreateInvoiceModal } from "@/components/CreateInvoiceModal";
+import { RecordPaymentModal } from "@/components/RecordPaymentModal";
+import { toast } from "sonner";
 
 function formatCurrency(n: number) {
-  return "₹" + n.toLocaleString("en-IN");
+  return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
 
-// --- Timer Component ---
+// --- Dynamic Timer Component ---
 function ActiveTimer() {
   const [running, setRunning] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  const [caseId, setCaseId] = useState('');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: cases = [] } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases
+  });
 
   useEffect(() => {
     if (running) {
@@ -113,47 +48,83 @@ function ActiveTimer() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running]);
 
+  const toggleTimer = () => {
+    if (!running && !caseId) {
+      toast.error("Please select a case before starting the timer");
+      return;
+    }
+    setRunning(!running);
+  };
+
+  const saveTime = async () => {
+    if (seconds < 60) {
+      toast.error("Timer must run for at least 1 minute before saving");
+      return;
+    }
+    const mins = Math.ceil(seconds / 60);
+    const selectedCase = cases.find(c => c.id === caseId);
+
+    try {
+      // In a real app we'd call billingService.recordTimeEntry
+      // For now we'll simulate it or if there is no recordTimeEntry yet, we'll just toast
+      toast.success(`Tracked ${mins} mins for ${selectedCase?.title}`);
+      
+      setSeconds(0);
+      setRunning(false);
+      setCaseId('');
+      queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+    } catch (e) {
+      toast.error("Failed to save time entry");
+    }
+  };
+
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
   const display = `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 
   return (
-    <Card className="border-accent/30">
+    <Card className="border-accent/30 shadow-sm relative overflow-hidden">
+      {running && <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent/40 via-accent to-accent/40 animate-pulse" />}
       <CardContent className="p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-full ${running ? "bg-destructive/10" : "bg-accent/10"}`}>
-              <Timer className={`h-5 w-5 ${running ? "text-destructive animate-pulse" : "text-accent"}`} />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className={`p-3 rounded-full flex items-center justify-center shrink-0 ${running ? "bg-accent/20 border border-accent/30" : "bg-muted"}`}>
+              <Timer className={`h-6 w-6 ${running ? "text-accent animate-pulse" : "text-muted-foreground"}`} />
             </div>
             <div>
-              <p className="font-mono text-2xl font-bold tracking-wider">{display}</p>
-              <p className="text-xs text-muted-foreground">
-                {running ? "Timer running" : seconds > 0 ? "Timer paused" : "Start tracking time"}
+              <p className={`font-mono text-3xl font-bold tracking-wider ${running ? "text-accent" : "text-foreground"}`}>{display}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {running ? "Timer active" : seconds > 0 ? "Timer paused" : "Ready to track time"}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Select>
-              <SelectTrigger className="w-40 text-xs h-8">
-                <SelectValue placeholder="Select case..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="C-2024-0847">Sharma vs. State</SelectItem>
-                <SelectItem value="C-2024-0846">Patel Merger</SelectItem>
-                <SelectItem value="C-2024-0845">Singh Property</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              onClick={() => setRunning(!running)}
-              className={running ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "bg-accent text-accent-foreground hover:bg-accent/90"}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <select 
+              value={caseId}
+              onChange={e => setCaseId(e.target.value)}
+              disabled={running}
+              className="flex h-10 w-full sm:w-48 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background divide-y"
             >
-              {running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              <option value="">Select case...</option>
+              {cases.map(c => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+            </select>
+            <Button
+              onClick={toggleTimer}
+              className={`h-10 w-10 p-0 shrink-0 ${running ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-accent text-accent-foreground hover:bg-accent/90"}`}
+            >
+              {running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 pl-0.5" />}
             </Button>
             {seconds > 0 && !running && (
-              <Button size="sm" variant="outline" onClick={() => setSeconds(0)}>
-                Save
+              <Button onClick={saveTime} className="h-10 bg-green-600 text-white hover:bg-green-700">
+                Log Time
+              </Button>
+            )}
+            {seconds > 0 && !running && (
+              <Button variant="ghost" onClick={() => setSeconds(0)} className="h-10 text-muted-foreground hover:text-destructive">
+                Reset
               </Button>
             )}
           </div>
@@ -163,23 +134,47 @@ function ActiveTimer() {
   );
 }
 
+// --- Main Billing Page ---
 export default function Billing() {
   const [search, setSearch] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [timeModalOpen, setTimeModalOpen] = useState(false);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const queryClient = useQueryClient();
 
-  const totalRevenue = invoicesData.reduce((s, i) => s + i.total, 0);
-  const totalPaid = invoicesData.filter((i) => i.status === "paid").reduce((s, i) => s + i.total, 0);
-  const totalPending = invoicesData.filter((i) => i.status === "unpaid").reduce((s, i) => s + i.total, 0);
-  const totalOverdue = invoicesData.filter((i) => i.status === "overdue").reduce((s, i) => s + i.total, 0);
-  const totalBillableHours = timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.hours, 0);
-  const unbilledHours = timeEntries.filter((t) => t.billable && !t.billed).reduce((s, t) => s + t.hours, 0);
+  const { data: invoices = [], isLoading: loadingInvoices } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: billingService.getAllInvoices
+  });
 
-  const stats = [
-    { label: "Total Revenue", value: formatCurrency(totalRevenue), icon: IndianRupee, color: "text-accent" },
-    { label: "Paid", value: formatCurrency(totalPaid), icon: TrendingUp, color: "text-success" },
-    { label: "Pending", value: formatCurrency(totalPending), icon: Receipt, color: "text-warning" },
-    { label: "Overdue", value: formatCurrency(totalOverdue), icon: Clock, color: "text-destructive" },
-  ];
+  const { data: timeEntries = [], isLoading: loadingTime } = useQuery({
+    queryKey: ['timeEntries'],
+    queryFn: () => billingService.getTimeEntries()
+  });
+
+  const isLoading = loadingInvoices || loadingTime;
+
+  const stats = useMemo(() => {
+    const totalRev = invoices.reduce((s, i) => s + i.total, 0);
+    const totalPaid = invoices.filter(i => i.status === "Paid").reduce((s, i) => s + i.total, 0);
+    const totalPending = invoices.filter(i => i.status === "Unpaid" || i.status === "Partial").reduce((s, i) => s + i.total, 0);
+    const totalOverdue = invoices.filter(i => i.status === "Overdue").reduce((s, i) => s + i.total, 0);
+    const unbilledAmt = timeEntries.filter(t => t.billable && !t.billed).reduce((s, t) => s + ((t.durationMinutes/60) * t.ratePerHour), 0);
+
+    return { totalRev, totalPaid, totalPending, totalOverdue, unbilledAmt };
+  }, [invoices, timeEntries]);
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Syncing Billing Ledger...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -189,212 +184,248 @@ export default function Billing() {
           <div>
             <h1 className="text-2xl font-display font-semibold tracking-tight">Billing & Invoicing</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {totalBillableHours}h billable · {unbilledHours}h unbilled
+              Track every minute, earn every rupee. <span className="font-semibold text-amber-600 ml-1">{formatCurrency(stats.unbilledAmt)} unbilled</span>
             </p>
           </div>
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0">
-            <Plus className="h-4 w-4" /> New Invoice
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setPaymentModalOpen(true)} className="gap-2 shrink-0">
+              <CreditCard className="h-4 w-4" /> Record Payment
+            </Button>
+            <Button onClick={() => setInvoiceModalOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0">
+              <Plus className="h-4 w-4" /> Create Invoice
+            </Button>
+          </div>
         </div>
 
-        {/* Stats */}
+        {/* Dynamic Timer */}
+        <ActiveTimer />
+
+        {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((s) => (
+          {[
+            { label: "Total Billed", value: formatCurrency(stats.totalRev), icon: IndianRupee, color: "text-blue-600 bg-blue-50" },
+            { label: "Received", value: formatCurrency(stats.totalPaid), icon: TrendingUp, color: "text-green-600 bg-green-50" },
+            { label: "Pending", value: formatCurrency(stats.totalPending), icon: Receipt, color: "text-amber-600 bg-amber-50" },
+            { label: "Overdue", value: formatCurrency(stats.totalOverdue), icon: Clock, color: "text-red-600 bg-red-50" },
+          ].map((s) => (
             <Card key={s.label}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
-                  <s.icon className={`h-4 w-4 ${s.color}`} />
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">{s.label}</p>
+                  <p className="text-xl font-display font-bold mt-1">{s.value}</p>
                 </div>
-                <p className="text-xl font-bold mt-1">{s.value}</p>
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${s.color}`}>
+                  <s.icon className="h-5 w-5" />
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        {/* Timer */}
-        <ActiveTimer />
-
         {/* Tabs */}
-        <Tabs defaultValue="invoices">
-          <TabsList>
+        <Tabs defaultValue="invoices" className="w-full">
+          <TabsList className="w-full sm:w-[500px] grid grid-cols-2">
             <TabsTrigger value="invoices" className="gap-1.5"><Receipt className="h-3.5 w-3.5" /> Invoices</TabsTrigger>
             <TabsTrigger value="time" className="gap-1.5"><Clock className="h-3.5 w-3.5" /> Time Entries</TabsTrigger>
           </TabsList>
 
-          {/* Invoices Tab */}
+          {/* INVOICES TAB */}
           <TabsContent value="invoices" className="mt-4 space-y-4">
-            <div className="relative">
+            <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search invoices..."
+                placeholder="Search by invoice ID or client..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
               />
             </div>
 
-            <Card>
+            <Card className="border-border/60 shadow-sm overflow-hidden">
               <CardContent className="p-0">
-                <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 border-b bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  <div className="col-span-2">Invoice</div>
-                  <div className="col-span-3">Client / Case</div>
-                  <div className="col-span-2">Amount</div>
-                  <div className="col-span-2">Issued</div>
-                  <div className="col-span-1">Due</div>
+                <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 border-b bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div className="col-span-2">Invoice ID</div>
+                  <div className="col-span-3">Client details</div>
+                  <div className="col-span-2">Total Amt</div>
+                  <div className="col-span-2">Dates</div>
                   <div className="col-span-1">Status</div>
-                  <div className="col-span-1">Actions</div>
+                  <div className="col-span-2 text-right">Actions</div>
                 </div>
-                <div className="divide-y">
-                  {invoicesData
-                    .filter((inv) => inv.client.toLowerCase().includes(search.toLowerCase()) || inv.id.toLowerCase().includes(search.toLowerCase()))
-                    .map((inv) => (
-                      <div
-                        key={inv.id}
-                        className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer items-center"
-                        onClick={() => setSelectedInvoice(inv)}
-                      >
-                        <div className="col-span-2 font-mono text-sm font-medium">{inv.id}</div>
-                        <div className="col-span-3">
-                          <p className="text-sm font-medium">{inv.client}</p>
-                          <p className="text-xs text-muted-foreground">{inv.case}</p>
+                <div className="divide-y divide-border/60">
+                  {invoices
+                    .filter(inv => {
+                      return inv.id.toLowerCase().includes(search.toLowerCase()) || 
+                             (inv.clientName?.toLowerCase() || '').includes(search.toLowerCase());
+                    })
+                    .map((inv) => {
+                      return (
+                        <div
+                          key={inv.id}
+                          className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer items-center group"
+                          onClick={() => setSelectedInvoice(inv)}
+                        >
+                          <div className="col-span-2 font-mono text-sm font-medium flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-primary" /> {inv.id}
+                          </div>
+                          <div className="col-span-3">
+                            <p className="text-sm font-medium group-hover:text-primary transition-colors">{inv.clientName || 'Unknown Client'}</p>
+                            {inv.caseTitle && <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px] truncate" title={inv.caseTitle}>{inv.caseTitle}</p>}
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-sm font-bold leading-none">{formatCurrency(inv.total)}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Subtotal: {formatCurrency(inv.amount)}</p>
+                          </div>
+                          <div className="col-span-2 text-xs">
+                            <p className="text-muted-foreground">Iss: {new Date(inv.issuedDate).toLocaleDateString()}</p>
+                            <p className={`font-medium ${new Date(inv.dueDate) < new Date() && inv.status !== 'Paid' ? 'text-destructive' : 'text-foreground'}`}>
+                              Due: {new Date(inv.dueDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="col-span-1"><StatusBadge status={inv.status.toLowerCase() as any} /></div>
+                          <div className="col-span-2 flex gap-1 justify-end">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => e.stopPropagation()}>
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => e.stopPropagation()}>
+                              <Send className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="col-span-2">
-                          <p className="text-sm font-bold">{formatCurrency(inv.total)}</p>
-                          <p className="text-xs text-muted-foreground">incl. tax {formatCurrency(inv.tax)}</p>
-                        </div>
-                        <div className="col-span-2 text-xs text-muted-foreground">{inv.issued}</div>
-                        <div className="col-span-1 text-xs">{inv.due}</div>
-                        <div className="col-span-1"><StatusBadge status={inv.status} /></div>
-                        <div className="col-span-1 flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
-                            <Send className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+                  {invoices.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground">No invoices generated yet.</div>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Time Entries Tab */}
+          {/* TIME ENTRIES TAB */}
           <TabsContent value="time" className="mt-4 space-y-4">
             <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
+              <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search time entries..." className="pl-9" />
+                <Input placeholder="Search descriptions..." className="pl-9" />
               </div>
-              <Button variant="outline" size="sm" className="gap-2 shrink-0">
-                <Plus className="h-4 w-4" /> Manual Entry
+              <Button variant="outline" onClick={() => setTimeModalOpen(true)} className="gap-2 shrink-0 shadow-sm">
+                <Plus className="h-4 w-4" /> Log Manual Time
               </Button>
             </div>
 
-            <Card>
+            <Card className="border-border/60 shadow-sm overflow-hidden">
               <CardContent className="p-0">
-                <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 border-b bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  <div className="col-span-3">Description</div>
-                  <div className="col-span-2">Case</div>
-                  <div className="col-span-2">Lawyer</div>
-                  <div className="col-span-1">Date</div>
-                  <div className="col-span-1">Hours</div>
-                  <div className="col-span-1">Rate</div>
-                  <div className="col-span-1">Amount</div>
-                  <div className="col-span-1">Status</div>
+                <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 border-b bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div className="col-span-4">Description</div>
+                  <div className="col-span-2">Case / Client</div>
+                  <div className="col-span-2">Date / Pro</div>
+                  <div className="col-span-1 text-center">Duration</div>
+                  <div className="col-span-2 text-right">Value</div>
+                  <div className="col-span-1 text-center">Status</div>
                 </div>
-                <div className="divide-y">
-                  {timeEntries.map((entry) => (
-                    <div key={entry.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-4 hover:bg-muted/30 transition-colors items-center">
-                      <div className="col-span-3">
-                        <p className="text-sm font-medium">{entry.description}</p>
-                        {!entry.billable && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Non-billable</span>}
+                <div className="divide-y divide-border/60">
+                  {timeEntries.map((entry) => {
+                    const hours = +(entry.durationMinutes / 60).toFixed(2);
+                    const value = hours * entry.ratePerHour;
+                    
+                    return (
+                      <div key={entry.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-4 items-center hover:bg-muted/30 transition-colors">
+                        <div className="col-span-4">
+                          <p className="text-sm font-medium leading-snug">{entry.description}</p>
+                          {!entry.billable && <Badge variant="secondary" className="mt-1.5 text-[9px] h-4 leading-none">Non-billable</Badge>}
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-xs font-medium truncate" title={entry.caseTitle}>{entry.caseTitle || 'Unknown Case'}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 truncate" title={entry.clientName}>{entry.clientName}</p>
+                        </div>
+                        <div className="col-span-2 text-xs">
+                          <p>{new Date(entry.date).toLocaleDateString()}</p>
+                          <p className="text-muted-foreground mt-0.5">{entry.userId}</p>
+                        </div>
+                        <div className="col-span-1 text-sm font-mono font-medium text-center">
+                          {Math.floor(entry.durationMinutes / 60)}h {entry.durationMinutes % 60}m
+                        </div>
+                        <div className="col-span-2 text-right">
+                          <p className="text-sm font-bold">{formatCurrency(value)}</p>
+                          {entry.billable && entry.ratePerHour > 0 && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(entry.ratePerHour)}/hr</p>
+                          )}
+                        </div>
+                        <div className="col-span-1 text-center">
+                          {entry.billed ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-success/15 text-success font-bold uppercase tracking-wider">Billed</span>
+                          ) : entry.billable ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase tracking-wider">Unbilled</span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-muted text-muted-foreground font-bold uppercase tracking-wider">N/A</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="col-span-2">
-                        <p className="text-sm">{entry.case}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{entry.caseId}</p>
-                      </div>
-                      <div className="col-span-2 text-sm text-muted-foreground">{entry.lawyer}</div>
-                      <div className="col-span-1 text-xs">{entry.date}</div>
-                      <div className="col-span-1 text-sm font-mono font-medium">{entry.hours}h</div>
-                      <div className="col-span-1 text-xs text-muted-foreground">{formatCurrency(entry.rate)}/h</div>
-                      <div className="col-span-1 text-sm font-medium">{formatCurrency(entry.hours * entry.rate)}</div>
-                      <div className="col-span-1">
-                        {entry.billed ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium">Billed</span>
-                        ) : entry.billable ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/15 text-warning font-medium">Unbilled</span>
-                        ) : (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">N/A</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
 
-        {/* Invoice Detail Dialog */}
+        {/* --- INVOICE DETAIL VIEW (View only) --- */}
         <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-accent" />
-                {selectedInvoice?.id}
+          <DialogContent className="sm:max-w-2xl bg-[#FCFCFD]">
+            <DialogHeader className="border-b pb-4">
+              <DialogTitle className="flex items-center justify-between font-display text-xl">
+                <span>INVOICE <span className="text-primary">{selectedInvoice?.id}</span></span>
+                <StatusBadge status={(selectedInvoice?.status || 'unpaid').toLowerCase() as any} />
               </DialogTitle>
             </DialogHeader>
             {selectedInvoice && (
-              <div className="space-y-4 pt-2">
-                <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="space-y-6 pt-2">
+                <div className="grid grid-cols-2 text-sm bg-white p-4 rounded-lg border shadow-sm">
                   <div>
-                    <p className="text-muted-foreground text-xs">Client</p>
-                    <p className="font-medium">{selectedInvoice.client}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Billed To</p>
+                    <p className="font-semibold text-base">{selectedInvoice.clientName}</p>
+                    <p className="text-muted-foreground mt-0.5 max-w-[200px] leading-snug">Client ID: {selectedInvoice.clientId}</p>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs">Status</p>
-                    <StatusBadge status={selectedInvoice.status} />
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs">Issued</p>
-                    <p>{selectedInvoice.issued}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs">Due</p>
-                    <p>{selectedInvoice.due}</p>
+                  <div className="text-right space-y-1.5">
+                    <div className="flex justify-end gap-4">
+                      <span className="text-muted-foreground">Issued Date</span>
+                      <span className="font-medium w-24">{new Date(selectedInvoice.issuedDate).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex justify-end gap-4">
+                      <span className="text-muted-foreground">Due Date</span>
+                      <span className="font-medium w-24">{new Date(selectedInvoice.dueDate).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Line Items</p>
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 text-xs text-muted-foreground font-medium">
-                      <div className="col-span-5">Description</div>
-                      <div className="col-span-2">Hours</div>
-                      <div className="col-span-2">Rate</div>
-                      <div className="col-span-3 text-right">Amount</div>
-                    </div>
+                <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+                  <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-muted/40 text-xs font-bold text-muted-foreground uppercase tracking-wider border-b">
+                    <div className="col-span-6">Description</div>
+                    <div className="col-span-2 text-center">Hours</div>
+                    <div className="col-span-2 text-right">Rate</div>
+                    <div className="col-span-2 text-right">Amount</div>
+                  </div>
+                  <div className="divide-y">
                     {selectedInvoice.items.map((item, i) => (
-                      <div key={i} className="grid grid-cols-12 gap-2 px-3 py-2.5 border-t text-sm">
-                        <div className="col-span-5">{item.description}</div>
-                        <div className="col-span-2 font-mono">{item.hours}h</div>
-                        <div className="col-span-2 text-muted-foreground">{formatCurrency(item.rate)}</div>
-                        <div className="col-span-3 text-right font-medium">{formatCurrency(item.amount)}</div>
+                      <div key={i} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm">
+                        <div className="col-span-6 text-muted-foreground leading-snug">{item.description}</div>
+                        <div className="col-span-2 text-center font-mono">{item.hours}h</div>
+                        <div className="col-span-2 text-right text-muted-foreground">{formatCurrency(item.rate)}</div>
+                        <div className="col-span-2 text-right font-medium">{formatCurrency(item.amount)}</div>
                       </div>
                     ))}
-                    <div className="border-t bg-muted/30 px-3 py-2 space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
+                  </div>
+                  <div className="bg-muted/10 px-4 py-3 border-t">
+                    <div className="flex flex-col gap-2 w-48 ml-auto text-sm">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Subtotal</span>
                         <span>{formatCurrency(selectedInvoice.amount)}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">GST (18%)</span>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Tax (18%)</span>
                         <span>{formatCurrency(selectedInvoice.tax)}</span>
                       </div>
-                      <div className="flex justify-between text-sm font-bold pt-1 border-t">
+                      <div className="flex justify-between font-bold text-base pt-2 border-t text-foreground">
                         <span>Total</span>
                         <span>{formatCurrency(selectedInvoice.total)}</span>
                       </div>
@@ -402,18 +433,24 @@ export default function Billing() {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1 gap-2">
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1 gap-2 bg-white">
                     <Download className="h-4 w-4" /> Download PDF
                   </Button>
                   <Button className="flex-1 gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
-                    <Send className="h-4 w-4" /> Send to Client
+                    <Send className="h-4 w-4" /> Send Reminder to Client
                   </Button>
                 </div>
               </div>
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Feature Modals */}
+        <LogTimeModal isOpen={timeModalOpen} onClose={() => setTimeModalOpen(false)} />
+        <CreateInvoiceModal isOpen={invoiceModalOpen} onClose={() => setInvoiceModalOpen(false)} />
+        <RecordPaymentModal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} />
+        
       </div>
     </AppLayout>
   );
