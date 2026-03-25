@@ -1,13 +1,29 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, Shield, Lock, Eye, Edit3, Trash2, Download } from "lucide-react";
-import { mockAccessControl } from "@/store/mockData";
 import { UserRole } from "@/types/security";
+import { useQuery } from "@tanstack/react-query";
+import { securityService } from "@/services/securityService";
+import { Loader2 } from "lucide-react";
 
 const ROLES: UserRole[] = ['Partner', 'Lawyer', 'Junior Associate', 'Admin', 'Client'];
 const MODULES = ['Cases', 'Documents', 'Billing', 'AI Assistant', 'System', 'Contracts'];
 
 export function AccessControlMatrix() {
+  const { data: permissions = [], isLoading } = useQuery({
+    queryKey: ['role-permissions'],
+    queryFn: securityService.getRolePermissions
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-20 gap-3">
+        <Loader2 className="h-10 w-10 text-accent animate-spin" />
+        <p className="text-sm font-bold text-muted-foreground animate-pulse">Loading Permissions...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -42,8 +58,9 @@ export function AccessControlMatrix() {
               <TableRow key={module} className="hover:bg-muted/10 transition-colors">
                 <TableCell className="font-bold text-xs py-4">{module}</TableCell>
                 {ROLES.map(role => {
-                  const rule = mockAccessControl.find(r => r.role === role && r.module === (module === 'AI Assistant' ? 'AI' : module === 'System' ? 'System' : module)); // Adjusted for mock naming
-                  // Default logic for demo purposes if rule not found exactly
+                  const dbModule = module === 'AI Assistant' ? 'AI' : module;
+                  const rule = permissions.find((r: any) => r.role === role && r.module === dbModule);
+                  
                   const canView = rule?.actions.includes('View') || (role === 'Admin');
                   const canEdit = rule?.actions.includes('Edit') || (role === 'Admin' && module !== 'AI Assistant');
                   const canDelete = rule?.actions.includes('Delete') || (role === 'Admin' && module === 'System');

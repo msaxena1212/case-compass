@@ -6,12 +6,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { mockContracts } from "@/store/mockData";
 import { Contract, ContractStatus } from "@/types/contract";
 import {
   Plus, Search, FileText, AlertTriangle, CheckCircle2,
-  Clock, PenLine, Send, FileSignature, Filter, Scale
+  Clock, PenLine, Send, FileSignature, Filter, Scale, Loader2
 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { contractService } from "@/services/contractService";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 const STATUS_CONFIG: Record<ContractStatus, { color: string; icon: React.ElementType }> = {
   'Draft':           { color: 'bg-slate-100 text-slate-700 border-slate-200', icon: PenLine },
@@ -37,11 +39,31 @@ const PIPELINE_STAGES: ContractStatus[] = [
 ];
 
 export default function ContractManager() {
-  const [contracts, setContracts] = useState<Contract[]>(mockContracts);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<ContractStatus | 'All'>('All');
+
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['contracts', page],
+    queryFn: () => contractService.getAllContracts(page, pageSize)
+  });
+
+  const contracts = response?.data || [];
+  const totalCount = response?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: ContractStatus }) => 
+      contractService.updateContract(id, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+    }
+  });
 
   const filtered = contracts.filter(c => {
     const matchSearch = c.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -52,7 +74,7 @@ export default function ContractManager() {
   });
 
   const handleStatusChange = (id: string, status: Contract['status']) => {
-    setContracts(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+    updateMutation.mutate({ id, status });
     if (selectedContract?.id === id) {
       setSelectedContract(prev => prev ? { ...prev, status } : null);
     }
@@ -65,6 +87,17 @@ export default function ContractManager() {
     const daysLeft = (new Date(c.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
     return daysLeft > 0 && daysLeft <= 30;
   }).length;
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Syncing Contracts...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -159,7 +192,7 @@ export default function ContractManager() {
                   >
                     <CardContent className="p-4 sm:p-5 flex items-start gap-4">
                       <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0 text-xl">
-                        {c.type === 'NDA' ? '🔒' : c.type === 'Service Agreement' ? '⚙️' : c.type === 'Employment Contract' ? '🧑‍💼' : c.type === 'Lease Agreement' ? '🏢' : '📦'}
+                        {c.type === 'NDA' ? '🔒' : c.type === 'Service' ? '⚙️' : c.type === 'Employment' ? '🧑‍💼' : c.type === 'Lease' ? '🏢' : '📦'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-start gap-2 mb-1">
@@ -192,6 +225,38 @@ export default function ContractManager() {
               })
             )}
           </div>
+
+          {totalPages > 1 && (
+            <div className="mt-6 flex justify-center">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => (
+                    <PaginationItem key={i}>
+                      <PaginationLink 
+                        onClick={() => setPage(i + 1)}
+                        isActive={page === i + 1}
+                        className="cursor-pointer"
+                      >
+                        {i + 1}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </div>
 
         {/* Detail Sidebar */}
@@ -209,7 +274,10 @@ export default function ContractManager() {
       <CreateContractModal
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={(c) => { setContracts([c, ...contracts]); setSelectedContract(c); }}
+        onCreated={(c) => { 
+          queryClient.invalidateQueries({ queryKey: ['contracts'] });
+          setSelectedContract(c); 
+        }}
       />
     </AppLayout>
   );

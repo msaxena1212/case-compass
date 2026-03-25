@@ -16,18 +16,45 @@ import {
   Scale,
   FileText
 } from "lucide-react";
-import { mockNotifications, mockCommunicationLogs } from "@/store/mockData";
+import { communicationService } from "@/services/communicationService";
 import { AppNotification, NotificationChannel, NotificationType } from "@/types/communication";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 export default function NotificationsHub() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<NotificationType | 'All'>('All');
   const [channelFilter, setChannelFilter] = useState<NotificationChannel | 'All'>('All');
 
-  const filteredNotifications = mockNotifications.filter(n => {
+  const [notificationPage, setNotificationPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const pageSize = 10;
+
+  const { data: notificationResponse, isLoading: loadingNotifications } = useQuery({
+    queryKey: ['notifications', notificationPage],
+    queryFn: () => communicationService.getNotifications(notificationPage, pageSize)
+  });
+
+  const { data: logResponse, isLoading: loadingLogs } = useQuery({
+    queryKey: ['communication-logs', logPage],
+    queryFn: () => communicationService.getCommunicationLogs(logPage, pageSize)
+  });
+
+  const notifications = notificationResponse?.data || [];
+  const totalNotifications = notificationResponse?.totalCount || 0;
+  const totalNotificationPages = Math.ceil(totalNotifications / pageSize);
+
+  const communicationLogs = logResponse?.data || [];
+  const totalLogs = logResponse?.totalCount || 0;
+  const totalLogPages = Math.ceil(totalLogs / pageSize);
+
+  const isLoading = loadingNotifications || loadingLogs;
+
+  const filteredNotifications = notifications.filter(n => {
     const typeMatch = filter === 'All' || n.type === filter;
     const channelMatch = channelFilter === 'All' || n.channel === channelFilter;
     return typeMatch && channelMatch;
@@ -51,6 +78,17 @@ export default function NotificationsHub() {
       default: return <Bell className="h-3 w-3 text-slate-400" />;
     }
   };
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Syncing Hub...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -139,6 +177,38 @@ export default function NotificationsHub() {
                 ))
               )}
             </div>
+
+            {totalNotificationPages > 1 && (
+              <div className="mt-6 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setNotificationPage(p => Math.max(1, p - 1))}
+                        className={notificationPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(totalNotificationPages, 5) }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink 
+                          onClick={() => setNotificationPage(i + 1)}
+                          isActive={notificationPage === i + 1}
+                          className="cursor-pointer"
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setNotificationPage(p => Math.min(totalNotificationPages, p + 1))}
+                        className={notificationPage === totalNotificationPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="communications" className="space-y-4">
@@ -155,13 +225,13 @@ export default function NotificationsHub() {
                   </tr>
                 </thead>
                 <tbody className="divide-y text-sm">
-                  {mockCommunicationLogs.map(log => (
+                  {communicationLogs.map(log => (
                     <tr key={log.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-muted-foreground font-medium">
                         {new Date(log.timestamp).toLocaleDateString()} <span className="opacity-50 ml-1">{new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                       </td>
                       <td className="px-6 py-4 font-semibold text-accent">{log.receiver}</td>
-                      <td className="px-6 py-4 max-w-xs "><p className="truncate text-muted-foreground">{log.content}</p></td>
+                      <td className="px-6 py-4 max-w-xs "><p className="truncate text-muted-foreground">{(log as any).summary}</p></td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1.5 font-bold text-[10px] uppercase text-muted-foreground">
                           {getChannelIcon(log.channel)} {log.channel}
@@ -174,7 +244,7 @@ export default function NotificationsHub() {
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-emerald-600 font-bold text-[10px] uppercase">
-                            <CheckCircle2 className="h-3 w-3" /> {log.status}
+                            <CheckCircle2 className="h-3 w-3" /> {log.status || 'Sent'}
                           </span>
                         )}
                       </td>
@@ -188,6 +258,38 @@ export default function NotificationsHub() {
                 </tbody>
               </table>
             </div>
+
+            {totalLogPages > 1 && (
+              <div className="mt-6 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                        className={logPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(totalLogPages, 5) }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink 
+                          onClick={() => setLogPage(i + 1)}
+                          isActive={logPage === i + 1}
+                          className="cursor-pointer"
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setLogPage(p => Math.min(totalLogPages, p + 1))}
+                        className={logPage === totalLogPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

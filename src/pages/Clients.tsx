@@ -12,18 +12,26 @@ import {
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { clientService } from "@/services/clientService";
+import { formatCurrency } from "@/utils/formatters";
 import { AddClientModal } from "@/components/AddClientModal";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 export default function Clients() {
   const [search, setSearch] = useState("");
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [activeType, setActiveType] = useState<string>('All');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
   const navigate = useNavigate();
 
-  const { data: clients = [], isLoading } = useQuery({
-    queryKey: ['clients'],
-    queryFn: clientService.getAllClients
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['clients', page],
+    queryFn: () => clientService.getAllClients(page, pageSize)
   });
+
+  const clients = response?.data || [];
+  const totalCount = response?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const filtered = useMemo(() => {
     let result = clients;
@@ -86,7 +94,7 @@ export default function Clients() {
             { label: 'Total Clients', value: stats.total, icon: Users, color: 'text-blue-600 bg-blue-50' },
             { label: 'Active', value: stats.active, icon: Activity, color: 'text-emerald-600 bg-emerald-50' },
             { label: 'Corporate', value: stats.corporate, icon: Briefcase, color: 'text-purple-600 bg-purple-50' },
-            { label: 'Outstanding Dues', value: `₹${(stats.outstanding/1000).toFixed(0)}k`, icon: ArrowUpRight, color: 'text-amber-600 bg-amber-50' },
+            { label: 'Outstanding Dues', value: formatCurrency(stats.outstanding), icon: ArrowUpRight, color: 'text-amber-600 bg-amber-50' },
           ].map(stat => (
             <Card key={stat.label} className="p-4 border-border/60 shadow-sm">
               <div className="flex items-center gap-3">
@@ -174,7 +182,7 @@ export default function Clients() {
                     <span>{client.linkedCaseIds?.length || 0} Cases</span>
                   </div>
                   <div className="font-medium text-muted-foreground flex items-center gap-1">
-                    <Activity className="h-3 w-3" /> Since {client.since}
+                    <Activity className="h-3 w-3" /> Since {new Date(client.createdAt).getFullYear()}
                   </div>
                 </div>
               </CardContent>
@@ -187,6 +195,38 @@ export default function Clients() {
             <Users className="h-8 w-8 mb-2 opacity-40" />
             <p className="text-sm">No clients found</p>
             <p className="text-xs mt-1">Try adjusting your search or filters</p>
+          </div>
+        )}
+
+        {!search && totalPages > 1 && (
+          <div className="mt-8">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }).map((_, i) => (
+                  <PaginationItem key={i}>
+                    <PaginationLink 
+                      onClick={() => setPage(i + 1)}
+                      isActive={page === i + 1}
+                      className="cursor-pointer"
+                    >
+                      {i + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
 

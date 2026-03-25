@@ -6,9 +6,11 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { mockCases, mockClients, generateId } from "@/store/mockData";
+import { caseService } from "@/services/caseService";
+import { clientService } from "@/services/clientService";
 import { Case, CaseType } from "@/types/case";
-import { toast } from "sonner"; 
+import { toast } from "sonner";
+import { useQuery, useMutation } from "@tanstack/react-query";
 
 const caseSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -25,6 +27,24 @@ const caseSchema = z.object({
 
 export default function CreateCase() {
   const navigate = useNavigate();
+  
+  const { data: clients = [], isLoading: loadingClients } = useQuery({
+    queryKey: ['clients'],
+    queryFn: clientService.getAllClients
+  });
+
+  const createCaseMutation = useMutation({
+    mutationFn: (newCase: any) => caseService.createCase(newCase),
+    onSuccess: (data) => {
+      toast.success("Case created successfully!");
+      navigate(`/cases/${data.id}`);
+    },
+    onError: (error) => {
+      toast.error("Failed to create case");
+      console.error(error);
+    }
+  });
+
   const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof caseSchema>>({
     resolver: zodResolver(caseSchema),
     defaultValues: {
@@ -34,21 +54,14 @@ export default function CreateCase() {
   });
 
   const onSubmit = (data: z.infer<typeof caseSchema>) => {
-    // Check duplicates
-    if (data.caseNumber && mockCases.some(c => c.caseNumber === data.caseNumber)) {
-      toast.error("Case already exists with this Case Number");
-      return;
-    }
-
-    const newCase: Case = {
-      id: generateId('case'),
+    const newCase = {
       title: data.title,
-      type: data.type as CaseType,
+      type: data.type,
       status: 'Filed',
       court: data.court,
       caseNumber: data.caseNumber,
       filingDate: data.filingDate,
-      lawyerId: 'law_1', // Mock assigned lawyer
+      lawyerId: (window as any).currentUser?.id || 'law_1', // Use actual user ID if available
       clientId: data.clientId,
       opponent: {
         petitioner: data.petitioner,
@@ -57,14 +70,10 @@ export default function CreateCase() {
         judge: data.judge
       },
       tags: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
       healthScore: 100
     };
 
-    mockCases.unshift(newCase);
-    toast.success("Case created successfully!");
-    navigate(`/cases/${newCase.id}`);
+    createCaseMutation.mutate(newCase);
   };
 
   return (
@@ -124,7 +133,7 @@ export default function CreateCase() {
                 <label className="text-sm font-medium">Select Client *</label>
                 <select {...register("clientId")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                   <option value="">-- Choose a client --</option>
-                  {mockClients.map(c => (
+                  {clients.map(c => (
                     <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
                   ))}
                 </select>

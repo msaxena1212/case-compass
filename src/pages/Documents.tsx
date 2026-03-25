@@ -12,10 +12,11 @@ import {
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { documentService } from "@/services/documentService";
-import { searchDocuments } from "@/store/mockData";
+import { formatDate } from "@/utils/formatters";
 import { LegalDocument, DocumentType } from "@/types/document";
 import { DocumentDetailPanel } from "@/components/DocumentDetailPanel";
 import { UploadDocumentModal } from "@/components/UploadDocumentModal";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 const fileTypeIcons: Record<string, React.ReactNode> = {
   pdf: <FileText className="h-5 w-5 text-red-500" />,
@@ -34,12 +35,17 @@ export default function Documents() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [aiSearchMode, setAiSearchMode] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const [groupByCase, setGroupByCase] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
-  const { data: documents = [], isLoading } = useQuery<LegalDocument[]>({
-    queryKey: ['documents'],
-    queryFn: documentService.getAllDocuments
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['documents', page],
+    queryFn: () => documentService.getAllDocuments(page, pageSize)
   });
+
+  const documents = response?.data || [];
+  const totalCount = response?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const allTags = useMemo(() => Array.from(new Set(documents.flatMap(d => d.tags || []))), [documents]);
 
@@ -106,7 +112,7 @@ export default function Documents() {
         <div className="min-w-0">
           <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{doc.fileName}</p>
           <p className="text-xs text-muted-foreground">
-            {new Date(doc.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric'})} · {doc.uploadedBy}
+            {formatDate(doc.uploadedAt)} · {doc.uploadedBy}
           </p>
         </div>
       </div>
@@ -340,6 +346,38 @@ export default function Documents() {
                 <p className="text-sm">No documents found</p>
               </div>
             )}
+          </div>
+        )}
+
+        {!search && totalPages > 1 && (
+          <div className="mt-8">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => (
+                  <PaginationItem key={i}>
+                    <PaginationLink 
+                      onClick={() => setPage(i + 1)}
+                      isActive={page === i + 1}
+                      className="cursor-pointer"
+                    >
+                      {i + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
 

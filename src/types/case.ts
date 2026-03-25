@@ -1,4 +1,4 @@
-export type CaseStatus = 'Draft' | 'Filed' | 'Ongoing' | 'Won' | 'Lost' | 'Settled' | 'Withdrawn';
+export type CaseStatus = 'Draft' | 'Filed' | 'Ongoing' | 'Won' | 'Lost' | 'Settled' | 'Withdrawn' | 'Open' | 'Pending' | 'Hearing' | 'Closed';
 export type CaseType = 'Civil' | 'Criminal' | 'Corporate';
 
 export interface OpponentDetails {

@@ -15,6 +15,7 @@ export interface CRMClient {
   notes?: string;
   since: string; // year
   avatar: string; // initials
+  avatarUrl?: string;
   linkedCaseIds: string[];
   healthScore: number; // 0-100
   totalBilled: number;

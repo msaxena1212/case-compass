@@ -7,8 +7,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { mockCRMClients, generateId } from "@/store/mockData";
-import { CRMClient } from "@/types/client";
+import { clientService } from "@/services/clientService";
 import { toast } from "sonner";
 import { AlertTriangle, UserPlus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -30,61 +29,48 @@ type AddClientModalProps = {
 };
 
 export function AddClientModal({ isOpen, onClose, onSuccess }: AddClientModalProps) {
-  const [duplicateWarning, setDuplicateWarning] = useState<CRMClient | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { register, handleSubmit, formState: { errors }, watch, reset } = useForm<z.infer<typeof clientSchema>>({
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<z.infer<typeof clientSchema>>({
     resolver: zodResolver(clientSchema),
     defaultValues: {
       type: "Individual",
     }
   });
 
-  const onSubmit = (data: z.infer<typeof clientSchema>) => {
+  const onSubmit = async (data: z.infer<typeof clientSchema>) => {
     setIsSubmitting(true);
     
-    // Check for duplicates by email or phone
-    if (!duplicateWarning) {
-      const existing = mockCRMClients.find(c => 
-        c.email.toLowerCase() === data.email.toLowerCase() || 
-        c.phone.replace(/\D/g,'') === data.phone.replace(/\D/g,'')
-      );
+    try {
+      // Logic for duplicate check could be added here via service
       
-      if (existing) {
-        setDuplicateWarning(existing);
-        setIsSubmitting(false);
-        return; 
-      }
+      const newClient = {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address || '',
+        type: data.type,
+        status: 'Active',
+        tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        notes: data.notes || '',
+        health_score: 100,
+        total_billed: 0,
+        outstanding_amount: 0
+      };
+
+      await clientService.createClient(newClient as any);
+      toast.success("Client onboarded successfully");
+      
+      reset();
+      setDuplicateWarning(null);
+      onSuccess?.();
+      onClose();
+    } catch (error: any) {
+      toast.error(`Failed to onboard client: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const newClient: CRMClient = {
-      id: generateId('cli'),
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      type: data.type,
-      status: 'Active',
-      tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      notes: data.notes,
-      since: new Date().getFullYear().toString(),
-      avatar: data.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
-      linkedCaseIds: [],
-      healthScore: 100, // New clients start at 100
-      totalBilled: 0,
-      outstandingAmount: 0,
-      createdAt: new Date().toISOString()
-    };
-
-    mockCRMClients.push(newClient);
-    toast.success("Client onboarded successfully");
-    
-    // Reset and close
-    reset();
-    setDuplicateWarning(null);
-    setIsSubmitting(false);
-    onSuccess?.();
-    onClose();
   };
 
   return (

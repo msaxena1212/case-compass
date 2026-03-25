@@ -36,8 +36,12 @@ export default function Reports() {
   const [aiInsight, setAiInsight] = useState('');
 
   // Queries for data aggregation based on type
-  const { data: casesData = [] } = useQuery({ queryKey: ['cases-report'], queryFn: caseService.getAllCases });
-  const { data: billingData = [] } = useQuery({ queryKey: ['billing-report'], queryFn: billingService.getAllInvoices });
+  const { data: casesResponse } = useQuery({ queryKey: ['cases-report'], queryFn: () => caseService.getAllCases(1, 1000) });
+  const casesData = casesResponse?.data || [];
+  
+  const { data: billingResponse } = useQuery({ queryKey: ['billing-report'], queryFn: () => billingService.getAllInvoices(1, 1000) });
+  const billingData = billingResponse?.data || [];
+
   const { data: auditData = [] } = useQuery({ queryKey: ['audit-report', filters], queryFn: () => reportService.getAuditLogs(filters) });
 
   const reportData = useMemo(() => {
@@ -53,14 +57,14 @@ export default function Reports() {
         }));
       case 'Revenue':
         return billingData.map(i => ({
-          Invoice: i.id,
-          Total: i.total,
+          Invoice: i.id.substring(0, 8),
+          Total: `₹${i.total.toLocaleString()}`,
           Date: i.issuedDate,
           Status: i.status
         }));
       case 'Audit Log':
         return auditData.map(l => ({
-          User: l.user_name,
+          User: l.user_name || 'System',
           Action: l.action,
           Resource: l.resource,
           Status: l.status,

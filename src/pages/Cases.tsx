@@ -9,25 +9,34 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { caseService } from "@/services/caseService";
 import { clientService } from "@/services/clientService";
-import { calculateHealthScore } from "@/store/mockData";
+import { calculateHealthScore } from "@/utils/caseUtils";
+import { formatDate } from "@/utils/formatters";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 const typeFilters = ["All", "Civil", "Criminal", "Corporate", "Family"];
 
 export default function Cases() {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
   const navigate = useNavigate();
 
-  const { data: rawCases = [], isLoading: loadingCases } = useQuery({
-    queryKey: ['cases'],
-    queryFn: caseService.getAllCases
+  const { data: caseResponse, isLoading: loadingCases } = useQuery({
+    queryKey: ['cases', page],
+    queryFn: () => caseService.getAllCases(page, pageSize)
   });
 
-  const { data: clients = [], isLoading: loadingClients } = useQuery({
+  const rawCases = caseResponse?.data || [];
+  const totalCount = caseResponse?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  const { data: clientsResponse, isLoading: loadingClients } = useQuery({
     queryKey: ['clients'],
-    queryFn: clientService.getAllClients
+    queryFn: () => clientService.getAllClients(1, 1000)
   });
 
+  const clients = clientsResponse?.data || [];
   const isLoading = loadingCases || loadingClients;
 
   const casesData = useMemo(() => rawCases.map(c => {
@@ -130,7 +139,7 @@ export default function Cases() {
                   </div>
                   <div className="col-span-2 text-sm truncate">{c.clientName}</div>
                   <div className="col-span-2 text-xs text-muted-foreground truncate">{c.court}</div>
-                  <div className="col-span-1 text-xs truncate">{new Date(c.filingDate).toLocaleDateString()}</div>
+                  <div className="col-span-1 text-xs truncate">{formatDate(c.filingDate)}</div>
                   <div className="col-span-1 flex items-center gap-1 text-xs">
                     <Activity className={`h-3 w-3 ${c.healthScore > 80 ? 'text-green-500' : c.healthScore > 50 ? 'text-yellow-500' : 'text-red-500'}`} />
                     <span>{c.healthScore}%</span>
@@ -150,6 +159,38 @@ export default function Cases() {
             )}
           </CardContent>
         </Card>
+
+        {!search && totalPages > 1 && (
+          <div className="mt-4">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => (
+                  <PaginationItem key={i}>
+                    <PaginationLink 
+                      onClick={() => setPage(i + 1)}
+                      isActive={page === i + 1}
+                      className="cursor-pointer"
+                    >
+                      {i + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

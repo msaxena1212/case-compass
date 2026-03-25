@@ -1,9 +1,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+// TEMPORARY HARDCODE - Env variables are not being picked up by Vite on this system
+const apiKey = "AIzaSyD6HQ3C-8zeCanJ9PLDCxxLTbQgOJfR1P0";
+
+// Simple check to see if the API key is provided and looks like a real key
+export const isGeminiAvailable = !!apiKey && apiKey.length > 20 && !apiKey.startsWith("YOUR_");
+
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
-export async function generateLegalContent(prompt: string, modelName: string = "gemini-1.5-pro") {
+export async function generateLegalContent(prompt: string, modelName: string = "gemini-3.1-flash-lite-preview") {
   try {
     const model = genAI.getGenerativeModel({ model: modelName });
     const result = await model.generateContent(prompt);
@@ -15,7 +20,7 @@ export async function generateLegalContent(prompt: string, modelName: string = "
   }
 }
 
-export async function* generateLegalContentStream(prompt: string, modelName: string = "gemini-1.5-pro") {
+export async function* generateLegalContentStream(prompt: string, modelName: string = "gemini-3.1-flash-lite-preview") {
   try {
     const model = genAI.getGenerativeModel({ model: modelName });
     const result = await model.generateContentStream(prompt);

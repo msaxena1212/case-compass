@@ -36,13 +36,12 @@ import { useQuery } from "@tanstack/react-query";
 import { caseService } from "@/services/caseService";
 import { clientService } from "@/services/clientService";
 import { billingService } from "@/services/billingService";
-import { generateDashboardInsights, calculateHealthScore } from "@/store/mockData";
+import { courtService } from "@/services/courtService";
+import { aiService } from "@/services/aiService";
+import { calculateHealthScore } from "@/utils/caseUtils";
+import { formatCurrency, formatDate } from "@/utils/formatters";
 
-function formatCurrency(n: number) {
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
-  return `₹${n}`;
-}
+// Uses global formatters
 
 const caseColors = {
   Civil: "hsl(228, 35%, 16%)",     // dark blue Accent
@@ -55,28 +54,43 @@ export default function Dashboard() {
   const navigate = useNavigate();
   
   // Real Data Fetching
-  const { data: cases = [], isLoading: loadingCases } = useQuery({ queryKey: ['cases'], queryFn: caseService.getAllCases });
-  const { data: clients = [], isLoading: loadingClients } = useQuery({ queryKey: ['clients'], queryFn: clientService.getAllClients });
-  const { data: invoices = [], isLoading: loadingInvoices } = useQuery({ queryKey: ['invoices'], queryFn: billingService.getAllInvoices });
-  const { data: timeEntries = [], isLoading: loadingTime } = useQuery({ queryKey: ['time-entries'], queryFn: () => billingService.getTimeEntries('all') }); // Generic for dashboard
+  const { data: casesResponse, isLoading: loadingCases } = useQuery({ queryKey: ['cases'], queryFn: () => caseService.getAllCases(1, 1000) });
+  const cases = casesResponse?.data || [];
   
-  const isLoading = loadingCases || loadingClients || loadingInvoices || loadingTime;
+  const { data: clientsResponse, isLoading: loadingClients } = useQuery({ queryKey: ['clients'], queryFn: () => clientService.getAllClients(1, 1000) });
+  const clients = clientsResponse?.data || [];
   
+  const { data: invoicesResponse, isLoading: loadingInvoices } = useQuery({ queryKey: ['invoices'], queryFn: () => billingService.getAllInvoices(1, 1000) });
+  const invoices = invoicesResponse?.data || [];
+  
+  const { data: hearingsResponse, isLoading: loadingHearings } = useQuery({ queryKey: ['hearings'], queryFn: () => courtService.getAllHearings(1, 1000) });
+  const rawHearings = hearingsResponse?.data || [];
+  const { data: timeEntries = [], isLoading: loadingTime } = useQuery({ 
+    queryKey: ['time-entries'], 
+    queryFn: () => billingService.getTimeEntries() 
+  });
+  
+  // Real AI Insights
+  const { data: insights = [], isLoading: loadingAi } = useQuery({
+    queryKey: ['dashboard-insights', cases.length, invoices.length],
+    queryFn: () => aiService.getDashboardInsights(cases, invoices),
+    enabled: cases.length > 0
+  });
+
+  const isLoading = loadingCases || loadingClients || loadingInvoices || loadingHearings || loadingAi || loadingTime;
+
   const today = new Date();
   const next48Hours = new Date(today.getTime() + 48 * 60 * 60 * 1000);
   
-  // Replace mock data references
-  const upcomingHearings = useMemo(() => [], []); // Will be fetched from courtService later
+  const upcomingHearings = useMemo(() => {
+    return rawHearings.filter((h: any) => h.status === 'Upcoming' || h.status === 'Adjourned');
+  }, [rawHearings]);
     
   const criticalAlerts = upcomingHearings.filter((h: any) => new Date(h.date) <= next48Hours);
   
   const recentCases = useMemo(() => [...cases]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5), [cases]);
-
-  // --- Analytics & Insights Calculations ---
-  
-  const insights = useMemo(() => generateDashboardInsights(), []); // Mock generator for now
 
   // 1. Top Stats
   const activeCasesCount = cases.filter(c => c.status !== 'Won' && c.status !== 'Lost').length;
@@ -91,9 +105,10 @@ export default function Dashboard() {
     const monthStr = d.toLocaleDateString('en-US', { month: 'short' });
     
     // In a real app we'd filter invoices by month.
+    // For now, we'll use base logic but without random noise for stability
     const base = mtdRevenue > 0 ? mtdRevenue : 50000;
-    const billed = base * (0.8 + (Math.random() * 0.6));
-    const collected = billed * (0.6 + (Math.random() * 0.3));
+    const billed = base * (0.8 + (i * 0.1));
+    const collected = billed * (0.7 + (i * 0.05));
 
     return { 
       month: monthStr, 
@@ -110,14 +125,14 @@ export default function Dashboard() {
 
   const caseDistribution = Object.entries(caseTypeCounts).map(([name, value]) => ({
     name,
-    value,
+    value: value as number,
     color: caseColors[name as keyof typeof caseColors] || "hsl(220, 10%, 50%)"
   }));
 
   // 4. Productivity Score (Billable vs Non-Billable Hours)
   const productivityStats = useMemo(() => {
-    const billableMins = timeEntries.filter(t => t.billable).reduce((s, t) => s + (t.durationMinutes || 0), 0);
-    const nonBillableMins = timeEntries.filter(t => !t.billable).reduce((s, t) => s + (t.durationMinutes || 0), 0);
+    const billableMins = (timeEntries as any[]).filter(t => t.billable).reduce((s, t) => s + (t.durationMinutes || 0), 0);
+    const nonBillableMins = (timeEntries as any[]).filter(t => !t.billable).reduce((s, t) => s + (t.durationMinutes || 0), 0);
     const total = billableMins + nonBillableMins;
     const percent = total > 0 ? Math.round((billableMins / total) * 100) : 0;
     return { billableMins, nonBillableMins, total, percent };
@@ -163,7 +178,7 @@ export default function Dashboard() {
         </div>
 
         {/* AI Strategic Insights */}
-        <AIInsightsWidget insights={insights} />
+        <AIInsightsWidget insights={insights} isLoading={loadingAi} />
 
         {/* Critical Alerts (Hearings) */}
         {criticalAlerts.length > 0 && (

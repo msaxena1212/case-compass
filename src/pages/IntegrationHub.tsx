@@ -7,8 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { mockIntegrations, mockApiSyncLogs } from "@/store/mockData";
 import { Integration } from "@/types/integration";
+import { integrationService } from "@/services/integrationService";
 import {
   Plug, Globe, Puzzle, Zap, Activity, Key, 
   ExternalLink, CheckCircle2, AlertCircle, RefreshCcw, 
@@ -17,13 +17,31 @@ import {
 import { toast } from "sonner";
 
 export default function IntegrationHub() {
-  const [integrations, setIntegrations] = useState<Integration[]>(mockIntegrations);
+  const queryClient = useQueryClient();
 
-  const handleToggleIntegration = (id: string, active: boolean) => {
-    setIntegrations(prev => prev.map(int => 
-      int.id === id ? { ...int, status: active ? 'Connected' : 'Disconnected' } : int
-    ));
-    toast.success(`${integrations.find(i => i.id === id)?.provider} ${active ? 'connected' : 'disconnected'}.`);
+  const { data: integrations = [], isLoading: loadingIntegrations } = useQuery({
+    queryKey: ['integrations'],
+    queryFn: integrationService.getIntegrations
+  });
+
+  const { data: syncLogs = [], isLoading: loadingLogs } = useQuery({
+    queryKey: ['sync-logs'],
+    queryFn: integrationService.getSyncLogs
+  });
+
+  const isLoading = loadingIntegrations || loadingLogs;
+
+  const handleToggleIntegration = async (id: string, active: boolean) => {
+    const status = active ? 'Connected' : 'Disconnected';
+    try {
+      await integrationService.toggleIntegration(id, status);
+      queryClient.invalidateQueries({ queryKey: ['integrations'] });
+      toast.success(`Success`, {
+        description: `Provider ${active ? 'connected' : 'disconnected'} successfully.`
+      });
+    } catch (error) {
+      toast.error("Error", { description: "Failed to update integration status." });
+    }
   };
 
   return (
@@ -156,7 +174,7 @@ export default function IntegrationHub() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockApiSyncLogs.map((log) => (
+                  {syncLogs.length > 0 ? syncLogs.map((log) => (
                     <TableRow key={log.id} className="hover:bg-muted/5 transition-colors">
                       <TableCell className="text-[11px] font-medium text-muted-foreground pl-6">
                         {new Date(log.timestamp).toLocaleString(undefined, {
@@ -166,7 +184,6 @@ export default function IntegrationHub() {
                       </TableCell>
                       <TableCell className="font-bold text-xs">
                         <div className="flex items-center gap-2">
-                          <span className="text-base">{mockIntegrations.find(i => i.provider === log.provider)?.icon}</span>
                           {log.provider}
                         </div>
                       </TableCell>
@@ -181,7 +198,11 @@ export default function IntegrationHub() {
                         </Badge>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No sync history available.</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
               <div className="p-4 border-t flex justify-center">

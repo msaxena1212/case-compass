@@ -15,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AppTask } from "@/types/task";
-import { mockCases, mockTasks, mockWorkflows } from "@/store/mockData";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Workflow, Sparkles } from "lucide-react";
@@ -26,13 +25,54 @@ interface StartWorkflowModalProps {
   onComplete: () => void;
 }
 
+import { taskService } from "@/services/taskService";
+import { caseService } from "@/services/caseService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 export function StartWorkflowModal({ open, onOpenChange, onComplete }: StartWorkflowModalProps) {
   const [caseId, setCaseId] = useState("");
   const [workflowId, setWorkflowId] = useState("");
   const [assignee, setAssignee] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const queryClient = useQueryClient();
 
-  const activeWorkflow = mockWorkflows.find(w => w.id === workflowId);
+  const { data: cases = [] } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases,
+    enabled: open
+  });
+
+  // Mock workflows are fine for now as templates, but let's assume they might come from a service
+  const { data: workflows = [] } = useQuery({
+    queryKey: ['workflow-templates'],
+    queryFn: async () => {
+      // For now, returning mock workflows but could be a service call
+      const { mockWorkflows } = await import("@/store/mockData");
+      return mockWorkflows;
+    },
+    enabled: open
+  });
+
+  const activeWorkflow = workflows.find((w: any) => w.id === workflowId);
+
+  const workflowMutation = useMutation({
+    mutationFn: async (tasks: any[]) => {
+      for (const task of tasks) {
+        await taskService.createTask(task);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setIsProcessing(false);
+      toast.success(`${activeWorkflow?.templateTasks.length} tasks generated and pipeline initiated.`);
+      onComplete();
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to start workflow: ${error.message}`);
+      setIsProcessing(false);
+    }
+  });
 
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,31 +83,23 @@ export function StartWorkflowModal({ open, onOpenChange, onComplete }: StartWork
 
     setIsProcessing(true);
 
-    // Simulate AI pipeline generation delay
-    setTimeout(() => {
-      const generatedTasks: AppTask[] = activeWorkflow!.templateTasks.map((t, index) => {
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + t.daysOffset);
-        
-        return {
-          id: `tsk_wf_${Date.now()}_${index}`,
-          caseId: caseId,
-          title: t.title,
-          description: t.description,
-          assignedTo: assignee,
-          createdBy: "System (Workflow)",
-          status: "Pending",
-          priority: t.priority,
-          dueDate: dueDate.toISOString(),
-          createdAt: new Date().toISOString()
-        };
-      });
+    const generatedTasks = activeWorkflow!.templateTasks.map((t: any) => {
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + t.daysOffset);
+      
+      return {
+        case_id: caseId,
+        title: t.title,
+        description: t.description,
+        assigned_to: assignee,
+        created_by: "System (Workflow)",
+        status: "Pending",
+        priority: t.priority,
+        due_date: dueDate.toISOString(),
+      };
+    });
 
-      mockTasks.push(...generatedTasks);
-      setIsProcessing(false);
-      toast.success(`${generatedTasks.length} tasks generated and pipeline initiated.`);
-      onComplete();
-    }, 1500);
+    workflowMutation.mutate(generatedTasks);
   };
 
   return (
@@ -90,7 +122,7 @@ export function StartWorkflowModal({ open, onOpenChange, onComplete }: StartWork
                 <SelectValue placeholder="Select case..." />
               </SelectTrigger>
               <SelectContent>
-                {mockCases.map(c => (
+                {cases.map((c: any) => (
                   <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
                 ))}
               </SelectContent>
@@ -104,7 +136,7 @@ export function StartWorkflowModal({ open, onOpenChange, onComplete }: StartWork
                 <SelectValue placeholder="Select workflow template..." />
               </SelectTrigger>
               <SelectContent>
-                {mockWorkflows.map(w => (
+                {workflows.map((w: any) => (
                   <SelectItem key={w.id} value={w.id}>{w.name} ({w.templateTasks.length} stages)</SelectItem>
                 ))}
               </SelectContent>

@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Contract, ContractType } from "@/types/contract";
-import { contractTemplates, mockCases, mockClients, addContract } from "@/store/mockData";
 import { toast } from "sonner";
 import { FileText, Sparkles, ChevronRight } from "lucide-react";
 
@@ -14,6 +13,11 @@ interface CreateContractModalProps {
   onOpenChange: (open: boolean) => void;
   onCreated?: (contract: Contract) => void;
 }
+
+import { contractService } from "@/services/contractService";
+import { contractTemplates } from "@/services/contractTemplates";
+import { caseService } from "@/services/caseService";
+import { useQuery } from "@tanstack/react-query";
 
 export function CreateContractModal({ open, onOpenChange, onCreated }: CreateContractModalProps) {
   const [step, setStep] = useState<'template' | 'details'>('template');
@@ -26,9 +30,14 @@ export function CreateContractModal({ open, onOpenChange, onCreated }: CreateCon
   const [expiryDate, setExpiryDate] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
+  const { data: cases = [] } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases
+  });
+
   const template = contractTemplates.find(t => t.id === selectedTemplate);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !partyA || !partyB) {
       toast.error('Title and both parties are required.');
@@ -36,40 +45,39 @@ export function CreateContractModal({ open, onOpenChange, onCreated }: CreateCon
     }
 
     setIsGenerating(true);
-    setTimeout(() => {
-      const newContract: Contract = {
-        id: `con_${Date.now()}`,
+    try {
+      const newContract: any = {
         title,
-        type: (template?.type || 'NDA') as ContractType,
+        type: template?.type || 'NDA',
         status: 'Draft',
         parties: { partyA, partyB },
-        caseId: caseId || undefined,
-        templateUsed: selectedTemplate || undefined,
-        riskScore: Math.floor(Math.random() * 40) + 10, // 10–50 for new draft
+        caseId: caseId !== 'none' ? caseId : undefined,
+        riskScore: Math.floor(Math.random() * 40) + 10,
         value: value ? parseFloat(value) : undefined,
         expiryDate: expiryDate || undefined,
         clauses: template ? template.defaultClauses.map((ct, i) => ({
           id: `cl_new_${i}`,
           type: ct,
           isCustom: false,
-          riskLevel: 'Low' as const,
+          riskLevel: 'Low',
           title: ct,
           content: `Standard ${ct} clause — click to edit.`
         })) : [],
         approvals: [],
-        version: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        version: 1
       };
 
-      addContract(newContract);
-      setIsGenerating(false);
+      const result = await contractService.createContract(newContract);
       toast.success(`Contract "${title}" created as Draft.`);
-      onCreated?.(newContract);
+      onCreated?.(result as any);
       onOpenChange(false);
       // Reset
       setStep('template'); setSelectedTemplate(''); setTitle(''); setPartyA(''); setPartyB(''); setCaseId(''); setValue(''); setExpiryDate('');
-    }, 1000);
+    } catch (error: any) {
+      toast.error(`Failed to create contract: ${error.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -149,7 +157,7 @@ export function CreateContractModal({ open, onOpenChange, onCreated }: CreateCon
                 <SelectTrigger><SelectValue placeholder="Select case..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No case link</SelectItem>
-                  {mockCases.map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>))}
+                  {cases.map((c: any) => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>

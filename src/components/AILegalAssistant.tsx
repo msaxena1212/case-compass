@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Sparkles, Send, Command } from "lucide-react";
 
+import { generateLegalContent, isGeminiAvailable } from "@/lib/gemini";
+
 interface AILegalAssistantProps {
   onSearch: (query: string) => void;
 }
@@ -13,27 +15,34 @@ export function AILegalAssistant({ onSearch }: AILegalAssistantProps) {
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [insight, setInsight] = useState<string | null>(null);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
 
-    // Simulate AI understanding the query before returning DB results
     setIsAiThinking(true);
     setInsight(null);
     
-    setTimeout(() => {
+    try {
+      // 1. Trigger the search for DB items immediately
       onSearch(query);
-      setIsAiThinking(false);
-      
-      // Fake AI insights based on keywords
-      if (query.toLowerCase().includes('cheque') || query.toLowerCase().includes('138')) {
-        setInsight("Under Section 138 of the NI Act, a legal notice must be sent within 30 days of the cheque bounce memo. I've found landmark judgments on territorial jurisdiction and a standard drafting template below.");
-      } else if (query.toLowerCase().includes('contract') || query.toLowerCase().includes('nda')) {
-        setInsight("For corporate NDAs or breaches of the Contract Act, I've pulled standard firm templates and the bare act references you might need.");
+
+      // 2. If Gemini is available, get a real contextual insight
+      if (isGeminiAvailable) {
+        const prompt = `You are a professional legal AI assistant for an Indian law firm. The user asked: "${query}". Provide a very concise 1-2 sentence strategic advice or context regarding this legal topic in the context of Indian law. Mention if any specific Acts (like NI Act, Contract Act, etc.) are relevant.`;
+        const aiResponse = await generateLegalContent(prompt);
+        setInsight(aiResponse);
       } else {
-        setInsight("I scanned past firm cases, acts, and Supreme Court judgments for your query. Here are the most relevant matches.");
+        // Fallback to simple simulated insight if API key is missing
+        setTimeout(() => {
+          setInsight("I scanned past firm cases, acts, and Supreme Court judgments for your query. Here are the most relevant matches.");
+        }, 800);
       }
-    }, 1200);
+    } catch (error) {
+       console.error("AI Assistant Error:", error);
+       setInsight("I'm having trouble connecting to my legal brain right now, but I've pulled the relevant documents from the firm's database for you.");
+    } finally {
+      setIsAiThinking(false);
+    }
   };
 
   return (

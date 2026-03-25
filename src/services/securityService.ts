@@ -2,25 +2,50 @@ import { supabase } from '@/lib/supabase';
 import { AuditLog, SecurityEvent } from '@/types/security';
 
 export const securityService = {
-  async getAuditLogs() {
-    const { data, error } = await supabase
+  async getAuditLogs(page: number = 1, pageSize: number = 10, query: string = '') {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    let supabaseQuery = supabase
       .from('audit_logs')
-      .select('*')
+      .select('*', { count: 'exact' });
+
+    if (query.trim()) {
+      supabaseQuery = supabaseQuery.or(`action.ilike.%${query}%,resource.ilike.%${query}%,user_name.ilike.%${query}%`);
+    }
+
+    const { data, error, count } = await supabaseQuery
       .order('timestamp', { ascending: false })
-      .limit(100);
+      .range(from, to);
 
     if (error) throw error;
-    return data as AuditLog[];
+    return {
+      data: data as AuditLog[],
+      totalCount: count || 0
+    };
   },
 
-  async getSecurityEvents() {
-    const { data, error } = await supabase
+  async getSecurityEvents(page: number = 1, pageSize: number = 10, query: string = '') {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    let supabaseQuery = supabase
       .from('security_events')
-      .select('*')
-      .order('timestamp', { ascending: false });
+      .select('*', { count: 'exact' });
+
+    if (query.trim()) {
+      supabaseQuery = supabaseQuery.or(`message.ilike.%${query}%,type.ilike.%${query}%`);
+    }
+
+    const { data, error, count } = await supabaseQuery
+      .order('timestamp', { ascending: false })
+      .range(from, to);
 
     if (error) throw error;
-    return data as SecurityEvent[];
+    return {
+      data: data as SecurityEvent[],
+      totalCount: count || 0
+    };
   },
 
   async logAction(action: Omit<AuditLog, 'id' | 'timestamp'>) {
@@ -45,5 +70,14 @@ export const securityService = {
 
     if (error) throw error;
     return data as SecurityEvent;
+  },
+
+  async getRolePermissions() {
+    const { data, error } = await supabase
+      .from('role_permissions')
+      .select('*');
+
+    if (error) throw error;
+    return data;
   }
 };

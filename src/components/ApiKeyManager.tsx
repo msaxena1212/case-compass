@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { ApiKey } from "@/types/integration";
-import { mockApiKeys, generateApiKey } from "@/store/mockData";
+import { securityService } from "@/services/securityService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,27 +24,48 @@ import { Key, Copy, Trash2, Plus, Clock, ShieldCheck, Eye, EyeOff } from "lucide
 import { toast } from "sonner";
 
 export function ApiKeyManager() {
-  const [keys, setKeys] = useState<ApiKey[]>(mockApiKeys);
   const [showKey, setShowKey] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyRole, setNewKeyRole] = useState<ApiKey['role']>("Read-Only");
+  const queryClient = useQueryClient();
+
+  const { data: keys = [] } = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: securityService.getApiKeys
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string, role: string }) => securityService.generateApiKey(data.name, data.role as any),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      setIsCreateOpen(false);
+      setNewKeyName("");
+      toast.success(`API Key "${newKeyName}" generated successfully.`);
+    },
+    onError: (error: any) => {
+      toast.error(`Error: ${error.message}`);
+    }
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (id: string) => securityService.revokeApiKey(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      toast.success("API Key access revoked.");
+    }
+  });
 
   const handleCreate = () => {
     if (!newKeyName) {
       toast.error("Please enter a name for the API key.");
       return;
     }
-    const key = generateApiKey(newKeyName, newKeyRole);
-    setKeys([key, ...keys]);
-    setIsCreateOpen(false);
-    setNewKeyName("");
-    toast.success(`API Key "${newKeyName}" generated successfully.`);
+    createMutation.mutate({ name: newKeyName, role: newKeyRole });
   };
 
   const handleRevoke = (id: string) => {
-    setKeys(keys.map(k => k.id === id ? { ...k, status: 'Revoked' as const } : k));
-    toast.success("API Key access revoked.");
+    revokeMutation.mutate(id);
   };
 
   const handleCopy = (key: string) => {

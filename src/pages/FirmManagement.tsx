@@ -5,29 +5,75 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { mockOffices, mockFirmUsers, mockRevenueMetrics } from "@/store/mockData";
+import { officeService } from "@/services/officeService";
+import { useQuery } from "@tanstack/react-query";
 import {
   Building2, Users, PieChart, MapPin, Phone,
   TrendingUp, Plus, ChevronRight, Globe, TrendingDown,
-  Mail, Briefcase, GraduationCap, ArrowRightLeft
+  Mail, Briefcase, GraduationCap, ArrowRightLeft, Loader2
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 export default function FirmManagement() {
   const [activeTab, setActiveTab] = useState("offices");
+  const [officePage, setOfficePage] = useState(1);
+  const [staffPage, setStaffPage] = useState(1);
+  const pageSize = 10;
 
-  const totalRevenue = mockOffices.reduce((sum, off) => sum + off.monthlyRevenue, 0);
-  const totalStaff = mockOffices.reduce((sum, off) => sum + off.staffCount, 0);
-  const totalCases = mockOffices.reduce((sum, off) => sum + off.activeCasesCount, 0);
+  const { data: allOffices = [] } = useQuery({
+    queryKey: ['all-offices'],
+    queryFn: () => officeService.getAllOffices()
+  });
 
-  const getOfficeName = (id: string) => mockOffices.find(o => o.id === id)?.name || id;
+  const { data: officesResponse, isLoading: loadingOffices } = useQuery({
+    queryKey: ['offices', officePage],
+    queryFn: () => officeService.getRevenueMetrics(officePage, pageSize)
+  });
+  const offices = officesResponse?.data || [];
+  const totalOffices = officesResponse?.totalCount || 0;
+  const totalOfficePages = Math.ceil(totalOffices / pageSize);
+
+  const { data: staffResponse, isLoading: loadingStaff } = useQuery({
+    queryKey: ['firm-staff', staffPage],
+    queryFn: () => officeService.getFirmStaff(staffPage, pageSize)
+  });
+  const firmStaff = staffResponse?.data || [];
+  const totalStaffCount = staffResponse?.totalCount || 0;
+  const totalStaffPages = Math.ceil(totalStaffCount / pageSize);
+
+  const isLoading = loadingOffices || loadingStaff;
+
+  const totalRevenue = allOffices.reduce((sum: number, off: any) => sum + (off.monthly_revenue || 0), 0);
+  const firmWideStaffTotal = allOffices.reduce((sum: number, off: any) => sum + (off.staff_count || 0), 0);
+  const firmWideCasesTotal = allOffices.reduce((sum: number, off: any) => sum + (off.active_cases_count || 0), 0);
+
+  const getOfficeName = (id: string) => offices.find((o: any) => o.id === id)?.name || id;
 
   // Pie chart data for revenue share
-  const revenueData = mockOffices.map(off => ({
+  const revenueData = offices.map((off: any) => ({
     name: off.name,
     value: off.monthlyRevenue,
-    color: off.id === 'off_delhi' ? '#0F172A' : off.id === 'off_mumbai' ? '#3B82F6' : '#8B5CF6'
+    color: off.id.includes('delhi') ? '#0F172A' : off.id.includes('mumbai') ? '#3B82F6' : '#8B5CF6'
   }));
+
+  const revenueMetrics = offices.map((off: any) => ({
+    officeId: off.id,
+    revenue: off.monthlyRevenue,
+    target: (off.monthlyRevenue || 0) * 1.2,
+    month: 'Mar'
+  }));
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Gathering Intelligence...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -46,9 +92,9 @@ export default function FirmManagement() {
         {/* Global Firm Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Branches', value: mockOffices.length, sub: 'Delhi, Mumbai, BLR', icon: Globe },
-            { label: 'Firm-wide Team', value: totalStaff, sub: 'Across all offices', icon: Users },
-            { label: 'Active Cases', value: totalCases, sub: 'Global workload', icon: Briefcase },
+            { label: 'Total Branches', value: allOffices.length, sub: 'Delhi, Mumbai, BLR', icon: Globe },
+            { label: 'Firm-wide Team', value: firmWideStaffTotal, sub: 'Across all offices', icon: Users },
+            { label: 'Active Cases', value: firmWideCasesTotal, sub: 'Global workload', icon: Briefcase },
             { label: 'Monthly Revenue', value: `₹${(totalRevenue / 100000).toFixed(1)}L`, sub: '+12% vs last month', icon: TrendingUp },
           ].map(s => (
             <Card key={s.label} className="border-border/60 shadow-sm">
@@ -82,7 +128,7 @@ export default function FirmManagement() {
           {/* Offices Tab */}
           <TabsContent value="offices" className="pt-6 m-0 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {mockOffices.map(office => (
+              {offices.map((office: any) => (
                 <Card key={office.id} className="group hover:shadow-md transition-all border-border/60 overflow-hidden">
                   <CardHeader className="bg-muted/30 border-b p-4">
                     <div className="flex justify-between items-start">
@@ -122,6 +168,38 @@ export default function FirmManagement() {
                 </Card>
               ))}
             </div>
+
+            {totalOfficePages > 1 && (
+              <div className="mt-8 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setOfficePage(p => Math.max(1, p - 1))}
+                        className={officePage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(totalOfficePages, 5) }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink 
+                          onClick={() => setOfficePage(i + 1)}
+                          isActive={officePage === i + 1}
+                          className="cursor-pointer"
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setOfficePage(p => Math.min(totalOfficePages, p + 1))}
+                        className={officePage === totalOfficePages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
             
             <div className="bg-accent/5 border border-accent/20 rounded-xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -151,7 +229,7 @@ export default function FirmManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockFirmUsers.map((u) => (
+                  {firmStaff.map((u: any) => (
                     <TableRow key={u.id} className="hover:bg-muted/10 transition-colors">
                       <TableCell className="py-4">
                         <div className="flex items-center gap-3">
@@ -185,6 +263,38 @@ export default function FirmManagement() {
                 </TableBody>
               </Table>
             </div>
+
+            {totalStaffPages > 1 && (
+              <div className="mt-8 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setStaffPage(p => Math.max(1, p - 1))}
+                        className={staffPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(totalStaffPages, 5) }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink 
+                          onClick={() => setStaffPage(i + 1)}
+                          isActive={staffPage === i + 1}
+                          className="cursor-pointer"
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setStaffPage(p => Math.min(totalStaffPages, p + 1))}
+                        className={staffPage === totalStaffPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </TabsContent>
 
           {/* Revenue Tab */}
@@ -202,7 +312,7 @@ export default function FirmManagement() {
                 </CardHeader>
                 <CardContent className="p-6 h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={mockRevenueMetrics.filter(m => m.month === 'Mar')}>
+                    <BarChart data={revenueMetrics}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                       <XAxis 
                         dataKey="officeId" 
@@ -217,8 +327,8 @@ export default function FirmManagement() {
                         labelFormatter={getOfficeName}
                       />
                       <Bar dataKey="revenue" radius={[6, 6, 0, 0]} barSize={40}>
-                        {mockRevenueMetrics.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={revenueData[index % 3].color} />
+                        {revenueMetrics.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={revenueData[index % revenueData.length]?.color || '#8B5CF6'} />
                         ))}
                       </Bar>
                       <Bar dataKey="target" fill="#E2E8F0" radius={[6, 6, 0, 0]} barSize={40} />

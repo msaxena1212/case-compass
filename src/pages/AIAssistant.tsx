@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { AIMessage, AICapabilityType } from "@/types/ai";
-import { aiCapabilities } from "@/store/mockData";
-import { generateLegalContentStream } from "@/lib/gemini";
+import { AICapability, AIMessage, AICapabilityType } from "@/types/ai";
+import { aiService, aiCapabilities } from "@/services/aiService";
+import { generateLegalContentStream, isGeminiAvailable } from "@/lib/gemini";
 import { useQuery } from "@tanstack/react-query";
 import { caseService } from "@/services/caseService";
 import { 
@@ -81,6 +81,26 @@ export default function AIAssistant() {
 
     let accumulated = '';
     try {
+      // Check if Gemini is available and key is provided
+      if (!isGeminiAvailable) {
+        console.warn("Gemini API key not found or invalid. Falling back to Demo Mode.");
+        toast.info("Running in Demo Mode (Mock AI)", {
+          description: "Real AI requires a valid Gemini API key in the .env file."
+        });
+        
+        const aiResponse = await aiService.simulateAIRequest(
+          selectedCapability, 
+          input, 
+          caseId === 'none' ? undefined : caseId,
+          (chunk) => setStreamingContent(prev => prev + chunk)
+        );
+        
+        setStreamingContent('');
+        setIsThinking(false);
+        setMessages(prev => [...prev, aiResponse]);
+        return;
+      }
+
       // Create context prompt based on selected capability
       const prompt = `Context: Role is a highly capable Indian Legal Assistant. 
                       Capability: ${capability.label}. 
@@ -111,10 +131,32 @@ export default function AIAssistant() {
       };
       
       setMessages(prev => [...prev, aiResponse]);
-    } catch (error) {
-      toast.error("AI Generation failed. Please check your API key.");
-      setIsThinking(false);
-      setStreamingContent('');
+    } catch (error: any) {
+      console.error("AI Generation Error:", error);
+      
+      const errorMessage = error?.message || "There was an issue with the AI service.";
+      
+      toast.warning("AI Generation failed. Switching to Demo Mode.", {
+        description: `Error: ${errorMessage.slice(0, 100)}${errorMessage.length > 100 ? '...' : ''}`
+      });
+      
+      // Secondary fallback if the real API fails mid-stream or during initialization
+      try {
+        const fallbackResponse = await aiService.simulateAIRequest(
+          selectedCapability, 
+          input, 
+          caseId === 'none' ? undefined : caseId,
+          (chunk) => setStreamingContent(prev => prev + chunk)
+        );
+        
+        setStreamingContent('');
+        setIsThinking(false);
+        setMessages(prev => [...prev, fallbackResponse]);
+      } catch (innerError) {
+        toast.error("Complete AI failure. Please check your connection.");
+        setIsThinking(false);
+        setStreamingContent('');
+      }
     }
   };
 

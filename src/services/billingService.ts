@@ -2,29 +2,36 @@ import { supabase } from '@/lib/supabase';
 import { Invoice, Payment, TimeEntry } from '@/types/billing';
 
 export const billingService = {
-  async getAllInvoices() {
-    const { data, error } = await supabase
+  async getAllInvoices(page: number = 1, pageSize: number = 10) {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from('billing_invoices')
-      .select('*, client:clients(name), case:cases(title)')
-      .order('issued_date', { ascending: false });
+      .select('*, client:clients(name), case:cases(title)', { count: 'exact' })
+      .order('issued_date', { ascending: false })
+      .range(from, to);
 
     if (error) throw error;
-    return (data || []).map(i => ({
-      id: i.id,
-      clientId: i.client_id,
-      clientName: i.client?.name,
-      caseId: i.case_id,
-      caseTitle: i.case?.title,
-      amount: i.amount,
-      tax: i.tax,
-      total: i.total,
-      issuedDate: i.issued_date,
-      dueDate: i.due_date,
-      status: i.status,
-      items: i.items || [],
-      notes: i.notes,
-      createdAt: i.created_at
-    })) as Invoice[];
+    return {
+      data: (data || []).map(i => ({
+        id: i.id,
+        clientId: i.client_id,
+        clientName: i.client?.name,
+        caseId: i.case_id,
+        caseTitle: i.case?.title,
+        amount: i.amount,
+        tax: i.tax,
+        total: i.total,
+        issuedDate: i.issued_date,
+        dueDate: i.due_date,
+        status: i.status,
+        items: i.items || [],
+        notes: i.notes,
+        createdAt: i.created_at
+      })) as Invoice[],
+      totalCount: count || 0
+    };
   },
 
   async getInvoiceById(id: string) {
@@ -38,13 +45,19 @@ export const billingService = {
     return data as Invoice;
   },
 
+  generateInvoiceId() {
+    const year = new Date().getFullYear();
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `INV-${year}-${random}`;
+  },
+
   async createInvoice(invoiceData: Omit<Invoice, 'id' | 'createdAt'> & { timeEntryIds?: string[] }) {
     const { timeEntryIds, ...dataToInsert } = invoiceData;
     
-    // 1. Create the invoice
     const { data: invoice, error: invError } = await supabase
       .from('billing_invoices')
       .insert([{
+        id: this.generateInvoiceId(),
         client_id: dataToInsert.clientId,
         case_id: dataToInsert.caseId,
         amount: dataToInsert.amount,
@@ -61,7 +74,6 @@ export const billingService = {
 
     if (invError) throw invError;
 
-    // 2. Link time entries if provided
     if (timeEntryIds && timeEntryIds.length > 0) {
       const { error: timeError } = await supabase
         .from('time_entries')
@@ -93,7 +105,6 @@ export const billingService = {
 
     if (payError) throw payError;
 
-    // Update invoice status based on total paid
     const { data: payments, error: listError } = await supabase
       .from('billing_payments')
       .select('amount')
@@ -137,35 +148,41 @@ export const billingService = {
     })) as Payment[];
   },
 
-  async getTimeEntries(caseId?: string) {
+  async getTimeEntries(page: number = 1, pageSize: number = 10, caseId?: string) {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
     let query = supabase
       .from('time_entries')
-      .select('*, case:cases(title), client:clients(name)')
+      .select('*, case:cases(title), client:clients(name)', { count: 'exact' })
       .order('date', { ascending: false });
 
     if (caseId) {
       query = query.eq('case_id', caseId);
     }
 
-    const { data, error } = await query;
+    const { data, error, count } = await query.range(from, to);
 
     if (error) throw error;
-    return (data || []).map(t => ({
-      id: t.id,
-      caseId: t.case_id,
-      caseTitle: t.case?.title,
-      clientId: t.client_id,
-      clientName: t.client?.name,
-      userId: t.user_id,
-      date: t.date,
-      durationMinutes: t.duration_minutes,
-      ratePerHour: t.rate_per_hour,
-      description: t.description,
-      billable: t.billable,
-      billed: t.billed,
-      linkedInvoiceId: t.linked_invoice_id,
-      createdAt: t.created_at
-    })) as TimeEntry[];
+    return {
+      data: (data || []).map(t => ({
+        id: t.id,
+        caseId: t.case_id,
+        caseTitle: t.case?.title,
+        clientId: t.client_id,
+        clientName: t.client?.name,
+        userId: t.user_id,
+        date: t.date,
+        durationMinutes: t.duration_minutes,
+        ratePerHour: t.rate_per_hour,
+        description: t.description,
+        billable: t.billable,
+        billed: t.billed,
+        linkedInvoiceId: t.linked_invoice_id,
+        createdAt: t.created_at
+      })) as TimeEntry[],
+      totalCount: count || 0
+    };
   },
 
   async saveTimeEntry(entry: Omit<TimeEntry, 'id' | 'createdAt'>) {

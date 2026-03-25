@@ -25,6 +25,7 @@ import FirmManagement from "./pages/FirmManagement";
 import SecurityCenter from "./pages/SecurityCenter";
 import IntegrationHub from "./pages/IntegrationHub";
 import Reports from "./pages/Reports";
+import SupabaseSetup from "./pages/SupabaseSetup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,8 +33,13 @@ const queryClient = new QueryClient();
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, isLoading } = useAuth();
   
+  console.log("ProtectedRoute: State", { isLoading, hasSession: !!session });
+
   if (isLoading) return <div className="h-screen w-full flex items-center justify-center font-bold text-accent">Loading Case Compass...</div>;
-  if (!session) return <Navigate to="/login" replace />;
+  if (!session) {
+    console.log("ProtectedRoute: No session, redirecting to login");
+    return <Navigate to="/login" replace />;
+  }
   
   return <>{children}</>;
 };
@@ -67,6 +73,7 @@ const App = () => (
             <Route path="/security" element={<ProtectedRoute><SecurityCenter /></ProtectedRoute>} />
             <Route path="/integrations" element={<ProtectedRoute><IntegrationHub /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/setup" element={<SupabaseSetup />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

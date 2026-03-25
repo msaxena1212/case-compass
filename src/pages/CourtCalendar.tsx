@@ -2,21 +2,36 @@ import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Clock, MapPin, Search, AlertTriangle } from "lucide-react";
-import { mockHearings } from "@/store/mockData";
-import { useState } from "react";
+import { courtService } from "@/services/courtService";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { CreateHearingModal } from "@/components/CreateHearingModal";
 import { UpdateHearingModal } from "@/components/UpdateHearingModal";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 export default function CourtCalendar() {
   const [search, setSearch] = useState("");
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [updateHearingId, setUpdateHearingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['hearings', page],
+    queryFn: () => courtService.getAllHearings(page, pageSize)
+  });
+
+  const rawHearings = data?.data || [];
+  const totalCount = data?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
   
   // Sort hearings by date
-  const sortedHearings = [...mockHearings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sortedHearings = useMemo(() => [...rawHearings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [rawHearings]);
   
   const today = new Date().toDateString();
   const todaysHearings = sortedHearings.filter(h => new Date(h.date).toDateString() === today);
@@ -84,6 +99,17 @@ export default function CourtCalendar() {
     h.title.toLowerCase().includes(search.toLowerCase()) || 
     h.court.toLowerCase().includes(search.toLowerCase())
   ) : sortedHearings;
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Syncing Calendar...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -158,6 +184,38 @@ export default function CourtCalendar() {
                  <h2 className="text-lg font-semibold mb-4">Search Results ({currentHearings.length})</h2>
                  {currentHearings.map(renderHearingCard)}
                </section>
+            )}
+
+            {!search && totalPages > 1 && (
+              <div className="mt-8">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink 
+                          onClick={() => setPage(i + 1)}
+                          isActive={page === i + 1}
+                          className="cursor-pointer"
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
             )}
           </div>
           

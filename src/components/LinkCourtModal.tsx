@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CourtType, CourtCaseLink } from "@/types/court";
-import { mockCourtLinks } from "@/store/mockData";
 import { toast } from "sonner";
 import { Scale, Link2, AlertCircle } from "lucide-react";
 
@@ -24,6 +23,9 @@ const STATES = [
   'Uttar Pradesh', 'Rajasthan', 'West Bengal', 'Telangana', 'Kerala'
 ];
 
+import { courtTrackerService } from "@/services/courtTrackerService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 export function LinkCourtModal({ open, onOpenChange, caseId, caseTitle, onLinked }: LinkCourtModalProps) {
   const [courtType, setCourtType] = useState<CourtType>('District Court');
   const [courtName, setCourtName] = useState('');
@@ -31,9 +33,28 @@ export function LinkCourtModal({ open, onOpenChange, caseId, caseTitle, onLinked
   const [filingYear, setFilingYear] = useState(new Date().getFullYear().toString());
   const [state, setState] = useState('Maharashtra');
   const [district, setDistrict] = useState('');
-  const [isValidating, setIsValidating] = useState(false);
+  const queryClient = useQueryClient();
 
-  const currentLink = mockCourtLinks.find(l => l.caseId === caseId);
+  const { data: links = [] } = useQuery({
+    queryKey: ['court-case-links'],
+    queryFn: courtTrackerService.getLinkedCases,
+    enabled: open
+  });
+
+  const currentLink = links.find((l: any) => l.caseId === caseId);
+
+  const linkMutation = useMutation({
+    mutationFn: (newLink: any) => courtTrackerService.linkCase(newLink),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['court-case-links'] });
+      toast.success(`Case linked to ${courtName}. CNR: ${cnrNumber.toUpperCase()}`);
+      onLinked?.();
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to link case: ${error.message}`);
+    }
+  });
 
   const handleLink = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,39 +63,26 @@ export function LinkCourtModal({ open, onOpenChange, caseId, caseTitle, onLinked
       return;
     }
 
-    setIsValidating(true);
-    // Simulate eCourts API validation
-    setTimeout(() => {
-      setIsValidating(false);
+    if (cnrNumber.length < 8) {
+      toast.error('Invalid CNR number format. Expected: MHNA01-234567-2024');
+      return;
+    }
 
-      if (cnrNumber.length < 8) {
-        toast.error('Invalid CNR number format. Expected: MHNA01-234567-2024');
-        return;
-      }
+    const newLink = {
+      caseId,
+      courtType,
+      courtName,
+      cnrNumber: cnrNumber.toUpperCase(),
+      filingYear,
+      state,
+      district: district || '',
+      syncStatus: 'Pending'
+    };
 
-      const newLink: CourtCaseLink = {
-        id: `cl_${Date.now()}`,
-        caseId,
-        courtType,
-        courtName,
-        cnrNumber: cnrNumber.toUpperCase(),
-        filingYear,
-        state,
-        district: district || undefined,
-        lastSyncedAt: undefined,
-        syncStatus: 'Pending'
-      };
-
-      // Remove old link for this case if exists
-      const idx = mockCourtLinks.findIndex(l => l.caseId === caseId);
-      if (idx !== -1) mockCourtLinks.splice(idx, 1);
-      mockCourtLinks.push(newLink);
-
-      toast.success(`Case linked to ${courtName}. CNR: ${cnrNumber.toUpperCase()}`);
-      onLinked?.();
-      onOpenChange(false);
-    }, 1200);
+    linkMutation.mutate(newLink);
   };
+
+  const isValidating = linkMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

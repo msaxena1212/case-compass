@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
+import { 
   Search, Plus, Clock, IndianRupee, FileText, Timer,
   Play, Pause, TrendingUp, Receipt, Download, Send, CreditCard, Loader2
 } from "lucide-react";
@@ -21,10 +21,10 @@ import { LogTimeModal } from "@/components/LogTimeModal";
 import { CreateInvoiceModal } from "@/components/CreateInvoiceModal";
 import { RecordPaymentModal } from "@/components/RecordPaymentModal";
 import { toast } from "sonner";
+import { formatCurrency, formatDate } from "@/utils/formatters";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
-function formatCurrency(n: number) {
-  return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
-}
+// Uses global formatters
 
 // --- Dynamic Timer Component ---
 function ActiveTimer() {
@@ -34,10 +34,11 @@ function ActiveTimer() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: cases = [] } = useQuery({
+  const { data: casesResponse } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases
+    queryFn: () => caseService.getAllCases(1, 1000)
   });
+  const cases = casesResponse?.data || [];
 
   useEffect(() => {
     if (running) {
@@ -65,8 +66,18 @@ function ActiveTimer() {
     const selectedCase = cases.find(c => c.id === caseId);
 
     try {
-      // In a real app we'd call billingService.recordTimeEntry
-      // For now we'll simulate it or if there is no recordTimeEntry yet, we'll just toast
+      await billingService.saveTimeEntry({
+        caseId,
+        clientId: selectedCase?.clientId || '',
+        userId: 'currentUser', // Should be from auth context
+        date: new Date().toISOString(),
+        durationMinutes: mins,
+        ratePerHour: 2500, // Default rate
+        description: `Tracked time for ${selectedCase?.title}`,
+        billable: true,
+        billed: false
+      });
+      
       toast.success(`Tracked ${mins} mins for ${selectedCase?.title}`);
       
       setSeconds(0);
@@ -141,17 +152,28 @@ export default function Billing() {
   const [timeModalOpen, setTimeModalOpen] = useState(false);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [timePage, setTimePage] = useState(1);
+  const pageSize = 10;
   const queryClient = useQueryClient();
 
-  const { data: invoices = [], isLoading: loadingInvoices } = useQuery({
-    queryKey: ['invoices'],
-    queryFn: billingService.getAllInvoices
+  const { data: invoiceResponse, isLoading: loadingInvoices } = useQuery({
+    queryKey: ['invoices', invoicePage],
+    queryFn: () => billingService.getAllInvoices(invoicePage, pageSize)
   });
 
-  const { data: timeEntries = [], isLoading: loadingTime } = useQuery({
-    queryKey: ['timeEntries'],
-    queryFn: () => billingService.getTimeEntries()
+  const { data: timeResponse, isLoading: loadingTime } = useQuery({
+    queryKey: ['timeEntries', timePage],
+    queryFn: () => billingService.getTimeEntries(timePage, pageSize)
   });
+
+  const invoices = invoiceResponse?.data || [];
+  const totalInvoices = invoiceResponse?.totalCount || 0;
+  const totalInvoicePages = Math.ceil(totalInvoices / pageSize);
+
+  const timeEntries = timeResponse?.data || [];
+  const totalTimeEntries = timeResponse?.totalCount || 0;
+  const totalTimePages = Math.ceil(totalTimeEntries / pageSize);
 
   const isLoading = loadingInvoices || loadingTime;
 
@@ -276,9 +298,9 @@ export default function Billing() {
                             <p className="text-[10px] text-muted-foreground mt-1">Subtotal: {formatCurrency(inv.amount)}</p>
                           </div>
                           <div className="col-span-2 text-xs">
-                            <p className="text-muted-foreground">Iss: {new Date(inv.issuedDate).toLocaleDateString()}</p>
+                            <p className="text-muted-foreground">Iss: {formatDate(inv.issuedDate)}</p>
                             <p className={`font-medium ${new Date(inv.dueDate) < new Date() && inv.status !== 'Paid' ? 'text-destructive' : 'text-foreground'}`}>
-                              Due: {new Date(inv.dueDate).toLocaleDateString()}
+                              Due: {formatDate(inv.dueDate)}
                             </p>
                           </div>
                           <div className="col-span-1"><StatusBadge status={inv.status.toLowerCase() as any} /></div>
@@ -299,6 +321,38 @@ export default function Billing() {
                 </div>
               </CardContent>
             </Card>
+
+            {!search && totalInvoicePages > 1 && (
+              <div className="mt-4">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setInvoicePage(p => Math.max(1, p - 1))}
+                        className={invoicePage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(totalInvoicePages, 5) }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink 
+                          onClick={() => setInvoicePage(i + 1)}
+                          isActive={invoicePage === i + 1}
+                          className="cursor-pointer"
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setInvoicePage(p => Math.min(totalInvoicePages, p + 1))}
+                        className={invoicePage === totalInvoicePages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </TabsContent>
 
           {/* TIME ENTRIES TAB */}
@@ -338,10 +392,10 @@ export default function Billing() {
                           <p className="text-xs font-medium truncate" title={entry.caseTitle}>{entry.caseTitle || 'Unknown Case'}</p>
                           <p className="text-[10px] text-muted-foreground mt-0.5 truncate" title={entry.clientName}>{entry.clientName}</p>
                         </div>
-                        <div className="col-span-2 text-xs">
-                          <p>{new Date(entry.date).toLocaleDateString()}</p>
-                          <p className="text-muted-foreground mt-0.5">{entry.userId}</p>
-                        </div>
+                          <div className="col-span-2 text-xs">
+                            <p>{formatDate(entry.date)}</p>
+                            <p className="text-muted-foreground mt-0.5">{entry.userId.split('-')[0]}</p>
+                          </div>
                         <div className="col-span-1 text-sm font-mono font-medium text-center">
                           {Math.floor(entry.durationMinutes / 60)}h {entry.durationMinutes % 60}m
                         </div>
@@ -366,6 +420,38 @@ export default function Billing() {
                 </div>
               </CardContent>
             </Card>
+
+            {totalTimePages > 1 && (
+              <div className="mt-4">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setTimePage(p => Math.max(1, p - 1))}
+                        className={timePage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(totalTimePages, 5) }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink 
+                          onClick={() => setTimePage(i + 1)}
+                          isActive={timePage === i + 1}
+                          className="cursor-pointer"
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setTimePage(p => Math.min(totalTimePages, p + 1))}
+                        className={timePage === totalTimePages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 
@@ -389,11 +475,11 @@ export default function Billing() {
                   <div className="text-right space-y-1.5">
                     <div className="flex justify-end gap-4">
                       <span className="text-muted-foreground">Issued Date</span>
-                      <span className="font-medium w-24">{new Date(selectedInvoice.issuedDate).toLocaleDateString()}</span>
+                      <span className="font-medium w-24">{formatDate(selectedInvoice.issuedDate)}</span>
                     </div>
                     <div className="flex justify-end gap-4">
                       <span className="text-muted-foreground">Due Date</span>
-                      <span className="font-medium w-24">{new Date(selectedInvoice.dueDate).toLocaleDateString()}</span>
+                      <span className="font-medium w-24">{formatDate(selectedInvoice.dueDate)}</span>
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 export type ContractType = 
-  | 'NDA' | 'Service Agreement' | 'Employment Contract' 
-  | 'Lease Agreement' | 'Vendor Agreement' | 'Partnership Deed' 
+  | 'NDA' | 'Service' | 'Employment' 
+  | 'Lease' | 'Vendor Agreement' | 'Partnership Deed' 
   | 'MOU' | 'Joint Venture' | 'Franchise Agreement';
 
 export type ContractStatus = 
@@ -11,7 +11,8 @@ export type ContractStatus =
 export type ClauseType = 
   | 'Confidentiality' | 'Indemnification' | 'Termination' 
   | 'Payment Terms' | 'IP Ownership' | 'Jurisdiction' 
-  | 'Force Majeure' | 'Dispute Resolution' | 'Non-Compete';
+  | 'Force Majeure' | 'Dispute Resolution' | 'Non-Compete'
+  | 'Exclusions' | 'Term' | 'Return of Materials' | 'Scope of Work' | 'Intellectual Property' | 'Compensation' | 'Duties' | 'Benefits' | 'Rent' | 'Maintenance' | 'Security Deposit' | 'Subletting';
 
 export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical';
 export type ApprovalStatus = 'Pending' | 'Approved' | 'Rejected';

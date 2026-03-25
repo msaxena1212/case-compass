@@ -1,96 +1,82 @@
 import { supabase } from '@/lib/supabase';
-import { Report, ReportFilters, ScheduledReport } from '@/types/report';
+import { ReportFilters } from '@/types/report';
 
 export const reportService = {
-  async getAllReports() {
-    const { data, error } = await supabase
-      .from('reports')
-      .select('*, generated_by_profile:profiles(name)')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return (data || []).map(r => ({
-      id: r.id,
-      title: r.title,
-      type: r.type,
-      filters: r.filters,
-      generatedBy: r.generated_by_profile?.name || 'Unknown',
-      fileUrl: r.file_url,
-      createdAt: r.created_at
-    })) as Report[];
-  },
-
-  async saveReport(report: Omit<Report, 'id' | 'createdAt'>) {
-    const { data, error } = await supabase
-      .from('reports')
-      .insert([{
-        title: report.title,
-        type: report.type,
-        filters: report.filters,
-        generated_by: report.generatedBy, // Expecting UUID here
-        file_url: report.fileUrl
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  async getScheduledReports() {
-    const { data, error } = await supabase
-      .from('scheduled_reports')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return (data || []).map(sr => ({
-      id: sr.id,
-      title: sr.title,
-      userId: sr.user_id,
-      reportType: sr.report_type,
-      frequency: sr.frequency,
-      recipients: sr.recipients,
-      lastSent: sr.last_sent,
-      nextRun: sr.next_run,
-      status: sr.status,
-      createdAt: sr.created_at
-    })) as ScheduledReport[];
-  },
-
-  async createSchedule(schedule: Omit<ScheduledReport, 'id' | 'createdAt'>) {
-    const { data, error } = await supabase
-      .from('scheduled_reports')
-      .insert([{
-        title: schedule.title,
-        user_id: schedule.userId,
-        report_type: schedule.reportType,
-        frequency: schedule.frequency,
-        recipients: schedule.recipients,
-        status: schedule.status
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  async getAuditLogs(filters?: ReportFilters) {
-    let query = supabase
-      .from('audit_logs')
-      .select('*, profile:profiles(name)')
-      .order('timestamp', { ascending: false });
-
-    if (filters?.dateRange) {
-      query = query.gte('timestamp', filters.dateRange.from).lte('timestamp', filters.dateRange.to);
+  async getAuditLogs(filters: ReportFilters = {}) {
+    let query = supabase.from('audit_logs').select('*');
+    
+    if (filters.startDate) {
+      query = query.gte('timestamp', filters.startDate);
     }
-    if (filters?.userId) {
-      query = query.eq('user_id', filters.userId);
+    if (filters.endDate) {
+      query = query.lte('timestamp', filters.endDate);
+    }
+    
+    const { data, error } = await query.order('timestamp', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+
+  async getRevenueStats(filters: ReportFilters = {}) {
+    let query = supabase.from('billing_invoices').select('total, issued_date, status');
+    
+    if (filters.startDate) {
+      query = query.gte('issued_date', filters.startDate);
+    }
+    if (filters.endDate) {
+      query = query.lte('issued_date', filters.endDate);
     }
 
     const { data, error } = await query;
     if (error) throw error;
     return data;
+  },
+
+  async getCaseStats() {
+    const { data, error } = await supabase
+      .from('cases')
+      .select('type, status, filing_date');
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async getFirmPerformance() {
+    // Aggregated stats for the analytics dashboard
+    const [cases, billing, clients] = await Promise.all([
+      supabase.from('cases').select('count', { count: 'exact', head: true }),
+      supabase.from('billing_invoices').select('total'),
+      supabase.from('clients').select('count', { count: 'exact', head: true })
+    ]);
+
+    const totalRevenue = (billing.data || []).reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+    return {
+      totalCases: cases.count || 0,
+      totalRevenue,
+      totalClients: clients.count || 0,
+      averageCaseValue: totalRevenue / (cases.count || 1)
+    };
+  },
+
+  async getRevenueTrend() {
+    const { data, error } = await supabase
+      .from('billing_invoices')
+      .select('total, issued_date')
+      .order('issued_date', { ascending: true });
+
+    if (error) throw error;
+
+    // Group by month
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const trend: Record<string, number> = {};
+
+    (data || []).forEach(inv => {
+      const date = new Date(inv.issued_date);
+      const month = months[date.getMonth()];
+      trend[month] = (trend[month] || 0) + (inv.total || 0);
+    });
+
+    return Object.entries(trend).map(([name, revenue]) => ({ name, revenue }));
   }
 };

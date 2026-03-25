@@ -16,9 +16,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AppTask, TaskPriority, TaskStatus } from "@/types/task";
-import { mockCases, mockTasks } from "@/store/mockData";
 import { useState } from "react";
 import { toast } from "sonner";
+import { taskService } from "@/services/taskService";
+import { caseService } from "@/services/caseService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface CreateTaskModalProps {
   open: boolean;
@@ -33,6 +35,35 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
   const [assignedTo, setAssignedTo] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("Medium");
   const [dueDate, setDueDate] = useState("");
+  const queryClient = useQueryClient();
+
+  const { data: cases = [] } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases,
+    enabled: open
+  });
+
+  const taskMutation = useMutation({
+    mutationFn: (newTask: any) => taskService.createTask(newTask),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task created and assigned successfully.");
+      
+      // Reset form
+      setTitle("");
+      setDescription("");
+      setCaseId("");
+      setAssignedTo("");
+      setPriority("Medium");
+      setDueDate("");
+      
+      onComplete();
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(`Error: ${error.message}`);
+    }
+  });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,32 +72,18 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
       return;
     }
 
-    const newTask: AppTask = {
-      id: `tsk_${Date.now()}`,
+    const newTask = {
       title,
       description,
-      caseId: caseId || undefined,
-      assignedTo,
-      createdBy: "Adv. Kumar",
+      case_id: caseId === "none" ? null : (caseId || null),
+      assigned_to: assignedTo,
+      created_by: "Adv. Kumar",
       status: "Pending",
       priority,
-      dueDate: new Date(dueDate).toISOString(),
-      createdAt: new Date().toISOString()
+      due_date: new Date(dueDate).toISOString(),
     };
 
-    // Temporarily pushing to mock array (in real app, this goes to backend)
-    mockTasks.unshift(newTask);
-    toast.success("Task created and assigned successfully.");
-    
-    // Reset form
-    setTitle("");
-    setDescription("");
-    setCaseId("");
-    setAssignedTo("");
-    setPriority("Medium");
-    setDueDate("");
-    
-    onComplete();
+    taskMutation.mutate(newTask as any);
   };
 
   return (
@@ -96,7 +113,7 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">-- Firm Admin / General --</SelectItem>
-                {mockCases.map(c => (
+                {cases.map((c: any) => (
                   <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
                 ))}
               </SelectContent>

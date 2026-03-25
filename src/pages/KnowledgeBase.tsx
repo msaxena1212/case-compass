@@ -3,10 +3,12 @@ import { AppLayout } from "@/components/AppLayout";
 import { AILegalAssistant } from "@/components/AILegalAssistant";
 import { KnowledgeSidebar } from "@/components/KnowledgeSidebar";
 import { Card, CardContent } from "@/components/ui/card";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Button } from "@/components/ui/button";
 import { KnowledgeItem, KnowledgeType } from "@/types/knowledge";
-import { searchKnowledgeBase } from "@/store/mockData";
-import { Scale, FileText, BookOpen, Clock, Eye } from "lucide-react";
+import { knowledgeBaseService } from "@/services/knowledgeBaseService";
+import { useQuery } from "@tanstack/react-query";
+import { Scale, FileText, BookOpen, Clock, Eye, Loader2 } from "lucide-react";
 
 const FILTERS: { label: string; value: KnowledgeType | "All" }[] = [
   { label: "All Databank", value: "All" },
@@ -19,22 +21,40 @@ export default function KnowledgeBase() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<KnowledgeType | "All">("All");
   const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 12; // 3 per row looks better with 12
+
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['knowledge-base', query, activeFilter, page],
+    queryFn: () => knowledgeBaseService.searchKnowledge(query, activeFilter, page, pageSize),
+    placeholderData: (previousData) => previousData
+  });
+
+  const filteredResults = response?.data || [];
+  const totalCount = response?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   // AI assistant calls this
   const handleSearch = (q: string) => {
     setQuery(q);
   };
 
-  const rawResults = searchKnowledgeBase(query);
-  const filteredResults = activeFilter === "All" 
-    ? rawResults 
-    : rawResults.filter(r => r.type === activeFilter);
-
   const getTypeIcon = (type: KnowledgeType) => {
     if (type === 'Judgment') return <Scale className="h-4 w-4 text-indigo-500" />;
     if (type === 'Template') return <FileText className="h-4 w-4 text-emerald-500" />;
     return <BookOpen className="h-4 w-4 text-amber-500" />;
   };
+
+  if (isLoading && filteredResults.length === 0) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Scanning Databank...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -133,6 +153,38 @@ export default function KnowledgeBase() {
             ))
           )}
         </div>
+
+        {totalPages > 1 && (
+          <div className="mt-8 flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => (
+                  <PaginationItem key={i}>
+                    <PaginationLink 
+                      onClick={() => setPage(i + 1)}
+                      isActive={page === i + 1}
+                      className="cursor-pointer"
+                    >
+                      {i + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
 
       <KnowledgeSidebar 

@@ -7,7 +7,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { mockHearings, generateId } from "@/store/mockData";
 import { Hearing, HearingStatus } from "@/types/hearing";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,9 +29,20 @@ type UpdateHearingModalProps = {
   onSuccess?: () => void;
 };
 
+import { courtService } from "@/services/courtService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 export function UpdateHearingModal({ isOpen, onClose, hearingId, onSuccess }: UpdateHearingModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const hearing = hearingId ? mockHearings.find(h => h.id === hearingId) : null;
+  const queryClient = useQueryClient();
+
+  const { data: hearings = [], isLoading } = useQuery({
+    queryKey: ['hearings'],
+    queryFn: courtService.getAllHearings,
+    enabled: isOpen
+  });
+
+  const hearing = hearingId ? hearings.find((h: any) => h.id === hearingId) : null;
 
   const { register, handleSubmit, formState: { errors }, watch, setValue, reset } = useForm<z.infer<typeof updateHearingSchema>>({
     resolver: zodResolver(updateHearingSchema),
@@ -43,39 +53,44 @@ export function UpdateHearingModal({ isOpen, onClose, hearingId, onSuccess }: Up
 
   const scheduleNext = watch("scheduleNext");
 
-  const onSubmit = (data: z.infer<typeof updateHearingSchema>) => {
+  const onSubmit = async (data: z.infer<typeof updateHearingSchema>) => {
     if (!hearing) return;
     setIsSubmitting(true);
 
-    // Update current hearing
-    hearing.status = 'Completed';
-    hearing.outcome = data.outcome;
-    if (data.notes) hearing.notes = (hearing.notes ? hearing.notes + "\n\nUpdate: " : "") + data.notes;
+    try {
+      // Update current hearing
+      await courtService.updateHearing(hearing.id, {
+        status: 'Completed',
+        outcome: data.outcome,
+        notes: (hearing.notes ? hearing.notes + "\n\nUpdate: " : "") + (data.notes || "")
+      } as any);
 
-    // Create next hearing if requested
-    if (data.scheduleNext && data.nextDate && data.nextTime && data.nextStage) {
-      const dateTimeIso = new Date(`${data.nextDate}T${data.nextTime}`).toISOString();
-      const newHearing: Hearing = {
-        id: generateId('hrg'),
-        caseId: hearing.caseId,
-        title: hearing.title,
-        date: dateTimeIso,
-        court: hearing.court,
-        judge: hearing.judge,
-        stage: data.nextStage,
-        status: 'Upcoming',
-      };
-      mockHearings.push(newHearing);
-      hearing.nextHearingId = newHearing.id;
-      toast.success("Hearing marked complete & next date scheduled!");
-    } else {
-      toast.success("Hearing marked complete!");
+      // Create next hearing if requested
+      if (data.scheduleNext && data.nextDate && data.nextTime && data.nextStage) {
+        const dateTimeIso = new Date(`${data.nextDate}T${data.nextTime}`).toISOString();
+        const newHearing = {
+          case_id: hearing.caseId,
+          date: dateTimeIso,
+          court: hearing.court,
+          judge: hearing.judge,
+          stage: data.nextStage,
+          status: 'Upcoming',
+        };
+        await courtService.createHearing(newHearing as any);
+        toast.success("Hearing marked complete & next date scheduled!");
+      } else {
+        toast.success("Hearing marked complete!");
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['hearings'] });
+      reset();
+      onSuccess?.();
+      onClose();
+    } catch (error: any) {
+      toast.error(`Failed to update hearing: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    reset();
-    setIsSubmitting(false);
-    onSuccess?.();
-    onClose();
   };
 
   if (!hearing) return null;

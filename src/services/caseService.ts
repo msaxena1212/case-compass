@@ -1,15 +1,25 @@
 import { supabase } from '@/lib/supabase';
-import { Case, TimelineEntry } from '@/types/case';
+import { Case, TimelineEntry, AppCase } from '@/types/case';
 
 export const caseService = {
-  async getAllCases() {
-    const { data, error } = await supabase
+  async getAllCases(page: number = 1, pageSize: number = 10) {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from('cases')
-      .select('*')
-      .order('updated_at', { ascending: false });
+      .select('*, profiles(name)', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
     if (error) throw error;
-    return data as Case[];
+    return {
+      data: (data || []).map(c => ({
+        ...c,
+        lawyerName: (c as any).profiles?.name || 'Unassigned'
+      })) as AppCase[],
+      totalCount: count || 0
+    };
   },
 
   async getCaseById(id: string) {

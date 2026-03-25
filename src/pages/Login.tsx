@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Shield, Lock, Mail, ChevronRight, Scale } from "lucide-react";
+import { Shield, Lock, Mail, ChevronRight, Scale, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -13,27 +14,57 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { session } = useAuth();
+
+  useEffect(() => {
+    if (session) {
+      console.log("Login: Session detected, navigating to dashboard...");
+      navigate("/", { replace: true });
+    }
+  }, [session, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.status === 400 || error.message.includes("Email not confirmed")) {
+          toast.error("Login failed. Please ensure your email is confirmed in Supabase or disable 'Confirm Email' in Auth Settings.");
+        } else {
+          throw error;
+        }
+        return;
+      }
 
-      toast.success("Welcome back to Case Compass");
-      navigate("/");
+      if (data.session) {
+        toast.success("Welcome back to Case Compass");
+        navigate("/", { replace: true });
+      } else {
+        toast.info("Account created, but requires confirmation. Please check your Supabase dashboard.");
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to login");
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (session) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 font-sans">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-10 w-10 text-accent animate-spin" />
+          <p className="text-sm font-bold text-slate-600">Checking credentials...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 p-4 font-sans">

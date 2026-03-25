@@ -7,8 +7,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { mockHearings, generateId, checkHearingClash } from "@/store/mockData";
-import { Hearing, HearingStatus } from "@/types/hearing";
+import { courtService } from "@/services/courtService";
+import { caseService } from "@/services/caseService";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -34,6 +35,12 @@ export function CreateHearingModal({ isOpen, onClose, defaultCaseId, onSuccess }
   const [clashWarning, setClashWarning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { data: cases = [] } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases,
+    enabled: !defaultCaseId
+  });
+
   const { register, handleSubmit, formState: { errors }, watch, reset } = useForm<z.infer<typeof hearingSchema>>({
     resolver: zodResolver(hearingSchema),
     defaultValues: {
@@ -41,44 +48,43 @@ export function CreateHearingModal({ isOpen, onClose, defaultCaseId, onSuccess }
     }
   });
 
-  const selectedDate = watch("date");
-  const selectedTime = watch("time");
-
-  // Simple debounced clash check could go here, for now checking on submit
-  
-  const onSubmit = (data: z.infer<typeof hearingSchema>) => {
+  const onSubmit = async (data: z.infer<typeof hearingSchema>) => {
     setIsSubmitting(true);
     const dateTimeIso = new Date(`${data.date}T${data.time}`).toISOString();
     
-    // Check for clash
-    if (!clashWarning && checkHearingClash(dateTimeIso)) {
-      setClashWarning(true);
+    try {
+      // Check for clash via service
+      if (!clashWarning) {
+        const hasClash = await courtService.checkHearingClash(dateTimeIso);
+        if (hasClash) {
+          setClashWarning(true);
+          setIsSubmitting(false);
+          return; 
+        }
+      }
+
+      const newHearing = {
+        case_id: data.caseId,
+        date: dateTimeIso,
+        court: data.court,
+        judge: data.judge || '',
+        stage: data.stage,
+        status: 'Upcoming',
+        notes: data.notes || '',
+      };
+
+      await courtService.createHearing(newHearing as any);
+      toast.success("Hearing scheduled successfully");
+      
+      reset();
+      setClashWarning(false);
+      onSuccess?.();
+      onClose();
+    } catch (error: any) {
+      toast.error(`Failed to schedule hearing: ${error.message}`);
+    } finally {
       setIsSubmitting(false);
-      return; 
     }
-
-    const newHearing: Hearing = {
-      id: generateId('hrg'),
-      caseId: data.caseId,
-      title: "Case " + data.caseId, // In real app, fetch case title
-      date: dateTimeIso,
-      court: data.court,
-      judge: data.judge,
-      stage: data.stage,
-      status: 'Upcoming',
-      notes: data.notes,
-      conflictWarning: clashWarning
-    };
-
-    mockHearings.push(newHearing);
-    toast.success("Hearing scheduled successfully");
-    
-    // Reset and close
-    reset();
-    setClashWarning(false);
-    setIsSubmitting(false);
-    onSuccess?.();
-    onClose();
   };
 
   return (
@@ -105,7 +111,12 @@ export function CreateHearingModal({ isOpen, onClose, defaultCaseId, onSuccess }
 
           <div className="space-y-2">
             <Label htmlFor="caseId">Case ID / Reference *</Label>
-            <Input id="caseId" {...register("caseId")} placeholder="Select Case" disabled={!!defaultCaseId} />
+            <select id="caseId" {...register("caseId")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={!!defaultCaseId}>
+              <option value="">Select Case...</option>
+              {cases.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.title} ({c.case_number})</option>
+              ))}
+            </select>
             {errors.caseId && <p className="text-xs text-red-500">{errors.caseId.message}</p>}
           </div>
 

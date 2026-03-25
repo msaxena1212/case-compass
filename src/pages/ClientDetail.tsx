@@ -1,6 +1,8 @@
-import { AppLayout } from "@/components/AppLayout";
 import { useParams, useNavigate } from "react-router-dom";
-import { mockCRMClients, mockCommunications, mockCases, mockDocuments } from "@/store/mockData";
+import { useQuery } from "@tanstack/react-query";
+import { clientService } from "@/services/clientService";
+import { documentService } from "@/services/documentService";
+import { formatDate, formatCurrency } from "@/utils/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,17 +11,60 @@ import { LogCommunicationModal } from "@/components/LogCommunicationModal";
 import {
   ArrowLeft, Phone, Mail, MapPin, Building, Activity,
   Calendar, FileText, PhoneCall, CheckCircle2,
-  Clock, Link2, ExternalLink, MessageSquarePlus, PieChart, Briefcase
+  Clock, Link2, ExternalLink, MessageSquarePlus, PieChart, Briefcase,
+  Loader2
 } from "lucide-react";
 import { useState } from "react";
+import { AppLayout } from "@/components/AppLayout";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 export default function ClientDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const client = mockCRMClients.find(c => c.id === id);
-  const [logModalOpen, setLogModalOpen] = useState(false);
 
-  if (!client) {
+  const { data: client, isLoading: loadingClient, error: clientError } = useQuery({
+    queryKey: ['client', id],
+    queryFn: () => clientService.getClientById(id || ''),
+    enabled: !!id
+  });
+
+  const [commPage, setCommPage] = useState(1);
+  const [docPage, setDocPage] = useState(1);
+  const pageSize = 10;
+
+  const { data: commsResponse, isLoading: loadingComm } = useQuery({
+    queryKey: ['communications', id, commPage],
+    queryFn: () => clientService.getCommunications(id || '', commPage, pageSize),
+    enabled: !!id
+  });
+  const clientComms = commsResponse?.data || [];
+  const totalComms = commsResponse?.totalCount || 0;
+  const totalCommPages = Math.ceil(totalComms / pageSize);
+
+  const { data: docsResponse, isLoading: loadingDocs } = useQuery({
+    queryKey: ['documents', id, docPage],
+    queryFn: () => documentService.getDocumentsByClient(id || '', docPage, pageSize),
+    enabled: !!id
+  });
+  const clientDocs = docsResponse?.data || [];
+  const totalDocs = docsResponse?.totalCount || 0;
+  const totalDocPages = Math.ceil(totalDocs / pageSize);
+
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const isLoading = loadingClient || loadingComm || loadingDocs;
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Loading Client Details...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!client || clientError) {
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center py-20">
@@ -30,12 +75,8 @@ export default function ClientDetail() {
     );
   }
 
-  // Get related data
-  const clientComms = mockCommunications.filter(c => c.clientId === client.id);
-  const linkedCases = mockCases.filter(c => client.linkedCaseIds.includes(c.id));
-  const clientDocs = mockDocuments.filter(d => 
-    linkedCases.some(c => c.id === d.caseId)
-  );
+  // Get related data (filtered from live queries or joined in service)
+  const linkedCases = client.cases || [];
 
   const getHealthColor = (score: number) => {
     if (score >= 80) return "text-green-600 bg-green-50 border-green-200";
@@ -81,12 +122,16 @@ export default function ClientDetail() {
             <Card className="border-border/60 shadow-sm">
               <CardContent className="p-5 flex flex-col items-center text-center">
                 <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-display font-bold text-primary mb-3 shadow-inner">
-                  {client.avatar}
+                  {(client as any).avatarUrl ? (
+                    <img src={(client as any).avatarUrl} alt={client.name} className="h-full w-full rounded-full object-cover" />
+                  ) : (
+                    client.name.split(' ').map((n: string) => n[0]).join('')
+                  )}
                 </div>
                 <h2 className="text-lg font-bold">{client.name}</h2>
                 <div className="flex items-center gap-1.5 justify-center mt-1">
                   <Badge variant="outline" className="text-[10px] font-medium tracking-wide bg-background">{client.type}</Badge>
-                  <Badge variant="outline" className="text-[10px] font-medium tracking-wide bg-background">Since {client.since}</Badge>
+                  <Badge variant="outline" className="text-[10px] font-medium tracking-wide bg-background">Since {new Date(client.createdAt).getFullYear()}</Badge>
                 </div>
                 
                 <div className={`mt-5 w-full flex items-center justify-between p-3 rounded-lg border ${getHealthColor(client.healthScore)}`}>
@@ -204,19 +249,19 @@ export default function ClientDetail() {
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y">
-                      {linkedCases.map(c => (
+                      {(client as any).cases.map((c: any) => (
                         <div key={c.id} className="p-4 hover:bg-muted/30 transition-colors flex items-center justify-between group cursor-pointer" onClick={() => navigate(`/cases/${c.id}`)}>
                           <div>
                             <p className="text-sm font-semibold group-hover:text-primary transition-colors">{c.title}</p>
                             <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                              <span className="font-mono">{c.caseNumber || c.id}</span>
-                              <span className="flex items-center gap-1"><Building className="h-3 w-3" /> {c.court}</span>
+                              <span className="font-mono">{c.caseNumber || c.id.split('-')[0]}</span>
+                              <span className="flex items-center gap-1"><Building className="h-3 w-3" /> {c.court || "N/A"}</span>
                             </div>
                           </div>
                           <Badge variant="outline" className="bg-background">{c.status}</Badge>
                         </div>
                       ))}
-                      {linkedCases.length === 0 && (
+                      {(client as any).cases.length === 0 && (
                         <div className="p-8 text-center text-muted-foreground text-sm">
                           No cases assigned to this client yet.
                         </div>
@@ -242,7 +287,7 @@ export default function ClientDetail() {
                           <div>
                             <p className="font-medium text-foreground">{comm.summary}</p>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {new Date(comm.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              {formatDate(comm.date, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } as any)}
                               {' · '}by {comm.loggedBy}
                             </p>
                           </div>
@@ -272,7 +317,7 @@ export default function ClientDetail() {
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-xs font-bold uppercase tracking-widest text-[#DBA859]">{comm.type}</span>
                               <span className="text-[10px] font-mono text-muted-foreground">
-                                {new Date(comm.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                {formatDate(comm.date, { month: 'short', day: 'numeric' })}
                               </span>
                             </div>
                             <h4 className="text-sm font-semibold">{comm.summary}</h4>
@@ -285,7 +330,7 @@ export default function ClientDetail() {
                               <span className="text-muted-foreground">Logged by <span className="font-medium text-foreground">{comm.loggedBy}</span></span>
                               {comm.followUpDate && (
                                 <span className="flex items-center gap-1 text-primary">
-                                  <Calendar className="h-3 w-3" /> F/U: {new Date(comm.followUpDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  <Calendar className="h-3 w-3" /> F/U: {formatDate(comm.followUpDate, { month: 'short', day: 'numeric' })}
                                 </span>
                               )}
                             </div>
@@ -297,6 +342,38 @@ export default function ClientDetail() {
                         </div>
                       )}
                     </div>
+
+                    {totalCommPages > 1 && (
+                      <div className="mt-8 flex justify-center">
+                        <Pagination>
+                          <PaginationContent>
+                            <PaginationItem>
+                              <PaginationPrevious 
+                                onClick={() => setCommPage(p => Math.max(1, p - 1))}
+                                className={commPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                              />
+                            </PaginationItem>
+                            {Array.from({ length: Math.min(totalCommPages, 5) }).map((_, i) => (
+                              <PaginationItem key={i}>
+                                <PaginationLink 
+                                  onClick={() => setCommPage(i + 1)}
+                                  isActive={commPage === i + 1}
+                                  className="cursor-pointer"
+                                >
+                                  {i + 1}
+                                </PaginationLink>
+                              </PaginationItem>
+                            ))}
+                            <PaginationItem>
+                              <PaginationNext 
+                                onClick={() => setCommPage(p => Math.min(totalCommPages, p + 1))}
+                                className={commPage === totalCommPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                              />
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -318,7 +395,7 @@ export default function ClientDetail() {
                             <FileText className="h-5 w-5 text-muted-foreground" />
                             <div>
                               <p className="text-sm font-medium">{doc.fileName}</p>
-                              <p className="text-xs text-muted-foreground">{doc.documentType} · Added {new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                              <p className="text-xs text-muted-foreground">{doc.documentType} · Added {formatDate(doc.uploadedAt)}</p>
                             </div>
                           </div>
                           <Badge variant="secondary" className="font-mono text-[10px]">{doc.caseId}</Badge>
@@ -328,6 +405,38 @@ export default function ClientDetail() {
                         <div className="p-8 text-center text-muted-foreground text-sm">No documents shared with this client.</div>
                       )}
                     </div>
+
+                    {totalDocPages > 1 && (
+                      <div className="mt-8 flex justify-center">
+                        <Pagination>
+                          <PaginationContent>
+                            <PaginationItem>
+                              <PaginationPrevious 
+                                onClick={() => setDocPage(p => Math.max(1, p - 1))}
+                                className={docPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                              />
+                            </PaginationItem>
+                            {Array.from({ length: Math.min(totalDocPages, 5) }).map((_, i) => (
+                              <PaginationItem key={i}>
+                                <PaginationLink 
+                                  onClick={() => setDocPage(i + 1)}
+                                  isActive={docPage === i + 1}
+                                  className="cursor-pointer"
+                                >
+                                  {i + 1}
+                                </PaginationLink>
+                              </PaginationItem>
+                            ))}
+                            <PaginationItem>
+                              <PaginationNext 
+                                onClick={() => setDocPage(p => Math.min(totalDocPages, p + 1))}
+                                className={docPage === totalDocPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                              />
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -340,7 +449,9 @@ export default function ClientDetail() {
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
                         <PieChart className="h-3.5 w-3.5" /> Total Billed
                       </p>
-                      <p className="text-3xl font-display font-bold mt-2">₹{client.totalBilled.toLocaleString()}</p>
+                      <p className="text-3xl font-display font-bold mt-2">
+                        {formatCurrency(client.totalBilled)}
+                      </p>
                     </CardContent>
                   </Card>
                   <Card className={`border-border/60 shadow-sm bg-gradient-to-br ${client.outstandingAmount > 0 ? 'from-amber-50 to-orange-50/20 border-amber-200' : 'from-green-50 to-emerald-50/20 border-green-200'}`}>
@@ -349,7 +460,7 @@ export default function ClientDetail() {
                         <Activity className="h-3.5 w-3.5" /> Outstanding Amount
                       </p>
                       <p className={`text-3xl font-display font-bold mt-2 ${client.outstandingAmount > 0 ? 'text-amber-700' : 'text-green-700'}`}>
-                        ₹{client.outstandingAmount.toLocaleString()}
+                        {formatCurrency(client.outstandingAmount)}
                       </p>
                       {client.outstandingAmount === 0 && (
                         <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Fully paid</p>
@@ -371,7 +482,7 @@ export default function ClientDetail() {
           isOpen={logModalOpen}
           onClose={() => setLogModalOpen(false)}
           clientId={client.id}
-          defaultCaseId={linkedCases[0]?.id}
+          defaultCaseId={(client as any).cases[0]?.id}
         />
       </div>
     </AppLayout>

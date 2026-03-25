@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useCallback, useRef } from "react";
 import { Upload, FileText, AlertTriangle, CheckCircle2, Loader2, Sparkles, X } from "lucide-react";
-import { mockCases, mockDocuments, generateId, checkDocumentDuplicate } from "@/store/mockData";
 import { LegalDocument, DocumentType } from "@/types/document";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -29,6 +28,10 @@ const processingSteps: { key: ProcessingStep; label: string; progress: number }[
 
 const documentTypes: DocumentType[] = ['Petition', 'Contract', 'Evidence', 'Order', 'Affidavit', 'Notice', 'Agreement'];
 
+import { documentService } from "@/services/documentService";
+import { caseService } from "@/services/caseService";
+import { useQuery } from "@tanstack/react-query";
+
 export function UploadDocumentModal({ isOpen, onClose, defaultCaseId }: UploadDocumentModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [caseId, setCaseId] = useState(defaultCaseId || '');
@@ -39,6 +42,12 @@ export function UploadDocumentModal({ isOpen, onClose, defaultCaseId }: UploadDo
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: cases = [] } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases,
+    enabled: isOpen
+  });
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -58,7 +67,7 @@ export function UploadDocumentModal({ isOpen, onClose, defaultCaseId }: UploadDo
     }
   }, []);
 
-  const validateAndSetFile = (file: File) => {
+  const validateAndSetFile = async (file: File) => {
     const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
     const maxSize = 50 * 1024 * 1024; // 50MB
 
@@ -71,9 +80,9 @@ export function UploadDocumentModal({ isOpen, onClose, defaultCaseId }: UploadDo
       return;
     }
 
-    // Simulate duplicate check
+    // Duplicate check via service
     const fakeHash = file.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
-    const dup = checkDocumentDuplicate(fakeHash);
+    const dup = await documentService.checkDuplicate(fakeHash);
     if (dup) {
       setDuplicateWarning(true);
     }
@@ -99,47 +108,51 @@ export function UploadDocumentModal({ isOpen, onClose, defaultCaseId }: UploadDo
       return;
     }
 
+    setIsDragging(false);
     await simulateProcessing();
 
-    const caseName = mockCases.find(c => c.id === caseId)?.title || caseId;
-    const fileExt = selectedFile.name.split('.').pop()?.toLowerCase() || 'pdf';
-    const fileType = fileExt === 'pdf' ? 'pdf' : fileExt === 'docx' ? 'docx' : 'image';
+    try {
+      const selectedCase = cases.find((c: any) => c.id === caseId);
+      const caseName = selectedCase?.title || 'General';
+      const fileExt = selectedFile.name.split('.').pop()?.toLowerCase() || 'pdf';
+      const fileType = fileExt === 'pdf' ? 'pdf' : fileExt === 'docx' ? 'docx' : 'image';
 
-    const newDoc: LegalDocument = {
-      id: generateId('doc'),
-      caseId,
-      caseName,
-      fileName: selectedFile.name,
-      fileUrl: `/docs/${selectedFile.name}`,
-      fileType: fileType as LegalDocument['fileType'],
-      documentType: docType,
-      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-      versionNumber: 1,
-      versions: [
-        { version: 1, date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), uploadedBy: 'Adv. Kumar', note: versionNote || 'Initial upload' },
-      ],
-      uploadedBy: 'Adv. Kumar',
-      uploadedAt: new Date().toISOString(),
-      size: `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`,
-      status: 'active',
-      aiSummary: 'AI processing complete. Document has been indexed and is now fully searchable.',
-      aiKeywords: tags.split(',').map(t => t.trim()).filter(Boolean),
-      riskClauses: [],
-      hash: generateId('hash'),
-    };
+      const newDoc: any = {
+        caseId,
+        caseName,
+        fileName: selectedFile.name,
+        fileType: fileType as any,
+        documentType: docType,
+        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        versionNumber: 1,
+        versions: [
+          { version: 1, date: new Date().toISOString(), uploadedBy: 'Adv. Kumar', note: versionNote || 'Initial upload' },
+        ],
+        uploadedBy: 'Adv. Kumar',
+        size: `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`,
+        status: 'active',
+        aiSummary: 'AI processing complete. Document has been indexed and is now fully searchable.',
+        aiKeywords: tags.split(',').map(t => t.trim()).filter(Boolean),
+        riskClauses: [],
+        hash: selectedFile.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12), // Simplified hash
+      };
 
-    mockDocuments.push(newDoc);
-    toast.success('Document uploaded & AI-processed successfully!');
+      await documentService.uploadDocument(newDoc, selectedFile);
+      toast.success('Document uploaded & AI-processed successfully!');
 
-    // Reset
-    setSelectedFile(null);
-    setCaseId(defaultCaseId || '');
-    setDocType('');
-    setTags('');
-    setVersionNote('');
-    setProcessingStep('idle');
-    setDuplicateWarning(false);
-    onClose();
+      // Reset
+      setSelectedFile(null);
+      setCaseId(defaultCaseId || '');
+      setDocType('');
+      setTags('');
+      setVersionNote('');
+      setProcessingStep('idle');
+      setDuplicateWarning(false);
+      onClose();
+    } catch (error: any) {
+      toast.error(`Failed to upload document: ${error.message}`);
+      setProcessingStep('idle');
+    }
   };
 
   const currentProgress = processingSteps.find(s => s.key === processingStep)?.progress || 0;
@@ -248,9 +261,9 @@ export function UploadDocumentModal({ isOpen, onClose, defaultCaseId }: UploadDo
                     <SelectValue placeholder="Select case..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockCases.map(c => (
+                    {cases.map((c: any) => (
                       <SelectItem key={c.id} value={c.id}>
-                        {c.caseNumber || c.id} · {c.title}
+                        {c.case_number || c.id} · {c.title}
                       </SelectItem>
                     ))}
                   </SelectContent>

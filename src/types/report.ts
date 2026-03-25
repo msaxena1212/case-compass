@@ -3,6 +3,8 @@ export type ReportFrequency = 'Daily' | 'Weekly' | 'Monthly';
 
 export interface ReportFilters {
   dateRange?: { from: string; to: string };
+  startDate?: string;
+  endDate?: string;
   caseId?: string;
   clientId?: string;
   userId?: string;

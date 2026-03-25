@@ -13,6 +13,8 @@ import {
   AlertCircle, BarChart3, User, Archive, Loader2 
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatDate } from "@/utils/formatters";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 const getStatusColor = (status: TaskStatus) => {
   switch (status) {
@@ -34,14 +36,20 @@ export default function Tasks() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'Team' | 'My Tasks'>('Team');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
   const queryClient = useQueryClient();
 
   const currentUser = "Adv. Kumar";
 
-  const { data: tasks = [], isLoading: loadingTasks } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: taskService.getAllTasks
+  const { data: response, isLoading: loadingTasks } = useQuery({
+    queryKey: ['tasks', page],
+    queryFn: () => taskService.getAllTasks(page, pageSize)
   });
+
+  const tasks = response?.data || [];
+  const totalCount = response?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string, status: TaskStatus }) => 
@@ -116,7 +124,7 @@ export default function Tasks() {
             <User className="h-3 w-3" /> {task.assignedTo}
           </span>
           <span className={`flex items-center gap-1 ${new Date(task.dueDate) < new Date() && task.status !== 'Completed' ? 'text-destructive font-bold' : ''}`}>
-             <Clock className="h-3 w-3" /> {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+             <Clock className="h-3 w-3" /> {formatDate(task.dueDate, { month: 'short', day: 'numeric' })}
           </span>
         </div>
         
@@ -254,6 +262,38 @@ export default function Tasks() {
            </div>
 
         </div>
+
+        {totalPages > 1 && (
+          <div className="mt-8 flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => (
+                  <PaginationItem key={i}>
+                    <PaginationLink 
+                      onClick={() => setPage(i + 1)}
+                      isActive={page === i + 1}
+                      className="cursor-pointer"
+                    >
+                      {i + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
 
       <CreateTaskModal 

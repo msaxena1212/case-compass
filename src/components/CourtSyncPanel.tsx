@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Case } from "@/types/case";
+import { CourtCaseLink, CourtSyncLog, CourtOrder, SyncStatus } from "@/types/court";
+import { courtTrackerService } from "@/services/courtTrackerService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CourtCaseLink, SyncLog } from "@/types/court";
-import { mockCourtOrders, mockSyncLogs, simulateCourtSync } from "@/store/mockData";
 import { 
   RefreshCw, 
   CheckCircle2, 
@@ -11,7 +12,8 @@ import {
   ExternalLink, 
   Scale,
   Link2,
-  History
+  History,
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,28 +24,43 @@ interface CourtSyncPanelProps {
 }
 
 export function CourtSyncPanel({ caseId, courtLink, onLinkClick }: CourtSyncPanelProps) {
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastLog, setLastLog] = useState<SyncLog | undefined>(
-    mockSyncLogs.find(l => l.caseId === caseId)
-  );
+  const queryClient = useQueryClient();
 
-  const orders = mockCourtOrders.filter(o => o.caseId === caseId);
+  const { data: orders = [], isLoading: loadingOrders } = useQuery({
+    queryKey: ['court-orders', caseId],
+    queryFn: () => courtTrackerService.getCourtOrders(caseId),
+    enabled: !!caseId
+  });
 
-  const handleSync = async () => {
-    if (!courtLink) return;
-    setIsSyncing(true);
-    toast.info(`Syncing with eCourts... CNR: ${courtLink.cnrNumber}`);
-    
-    const log = await simulateCourtSync(caseId, courtLink.cnrNumber);
-    setLastLog(log);
-    setIsSyncing(false);
+  const { data: logs = [], isLoading: loadingLogs } = useQuery({
+    queryKey: ['court-sync-logs'],
+    queryFn: courtTrackerService.getSyncLogs
+  });
 
-    if (log.status === 'Success') {
-      toast.success(`Sync complete! ${log.updatesFound} update(s) found.`);
-    } else {
-      toast.error('Sync failed. eCourts server timed out. Will retry automatically.');
+  const lastLog = logs.find((l: CourtSyncLog) => l.caseId === caseId);
+
+  const syncMutation = useMutation({
+    mutationFn: () => courtTrackerService.simulateSync(caseId, courtLink?.cnrNumber || ''),
+    onSuccess: (log) => {
+      queryClient.invalidateQueries({ queryKey: ['court-sync-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['court-orders', caseId] });
+      queryClient.invalidateQueries({ queryKey: ['court-case-links'] });
+      
+      if (log.status === 'Success') {
+        toast.success(`Sync complete! ${log.updatesFound} update(s) found.`);
+      } else {
+        toast.error('Sync failed. eCourts server timed out.');
+      }
     }
+  });
+
+  const handleSync = () => {
+    if (!courtLink) return;
+    toast.info(`Syncing with eCourts... CNR: ${courtLink.cnrNumber}`);
+    syncMutation.mutate();
   };
+
+  const isSyncing = syncMutation.isPending;
 
   if (!courtLink) {
     return (
@@ -106,7 +123,11 @@ export function CourtSyncPanel({ caseId, courtLink, onLinkClick }: CourtSyncPane
       </Card>
 
       {/* Orders from eCourts */}
-      {orders.length > 0 && (
+      {(loadingOrders) ? (
+        <div className="flex justify-center p-4">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : orders.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Court Orders & Updates</p>
           {orders.map(order => (

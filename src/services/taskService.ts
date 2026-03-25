@@ -2,39 +2,66 @@ import { supabase } from '@/lib/supabase';
 import { AppTask } from '@/types/task';
 
 export const taskService = {
-  async getAllTasks() {
-    const { data, error } = await supabase
+  async getAllTasks(page: number = 1, pageSize: number = 10) {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from('tasks')
-      .select('*, cases(title)')
-      .order('due_date', { ascending: true });
+      .select('*, case:cases(title)', { count: 'exact' })
+      .order('due_date', { ascending: true })
+      .range(from, to);
 
     if (error) throw error;
-    return (data || []).map(t => ({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      caseId: t.case_id,
-      caseName: t.cases?.title,
-      assignedTo: t.assigned_to,
-      createdBy: t.created_by,
-      status: t.status,
-      priority: t.priority,
-      dueDate: t.due_date,
-      completedAt: t.completed_at,
-      createdAt: t.created_at,
-      dependencies: t.dependencies || []
-    })) as AppTask[];
+    return {
+      data: (data || []).map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        caseId: t.case_id,
+        caseName: t.case?.title,
+        assignedTo: t.assigned_to,
+        createdBy: t.created_by,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.due_date,
+        completedAt: t.completed_at,
+        createdAt: t.created_at,
+        dependencies: t.dependencies || []
+      })) as AppTask[],
+      totalCount: count || 0
+    };
   },
 
-  async getTasksByCase(caseId: string) {
-    const { data, error } = await supabase
+  async getTasksByCase(caseId: string, page: number = 1, pageSize: number = 10) {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from('tasks')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('case_id', caseId)
-      .order('due_date', { ascending: true });
+      .order('due_date', { ascending: true })
+      .range(from, to);
 
     if (error) throw error;
-    return data as AppTask[];
+    return {
+      data: (data || []).map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        caseId: t.case_id,
+        assignedTo: t.assigned_to,
+        createdBy: t.created_by,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.due_date,
+        completedAt: t.completed_at,
+        createdAt: t.created_at,
+        dependencies: t.dependencies || []
+      })) as AppTask[],
+      totalCount: count || 0
+    };
   },
 
   async createTask(taskData: Omit<AppTask, 'id' | 'createdAt'>) {

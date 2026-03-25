@@ -18,16 +18,32 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { mockNotifications, getUnreadNotificationCount, markNotificationAsRead } from "@/store/mockData";
+import { communicationService } from "@/services/communicationService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppNotification, NotificationChannel, NotificationType } from "@/types/communication";
 import { useNavigate } from "react-router-dom";
 
 export function NotificationBell() {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(getUnreadNotificationCount());
+  const queryClient = useQueryClient();
 
-  const recentNotifications = mockNotifications
+  const { data: notificationsResponse } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => communicationService.getNotifications(1, 50)
+  });
+
+  const notifications = notificationsResponse?.data || [];
+  const unreadCount = notifications.filter(n => n.status === 'Unread').length;
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => communicationService.markNotificationRead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    }
+  });
+
+  const recentNotifications = [...notifications]
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, 5);
 
@@ -42,11 +58,11 @@ export function NotificationBell() {
   };
 
   const handleRead = (id: string, url?: string) => {
-    markNotificationAsRead(id);
-    setUnreadCount(getUnreadNotificationCount());
+    markReadMutation.mutate(id);
     setIsOpen(false);
     if (url) navigate(url);
   };
+
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>

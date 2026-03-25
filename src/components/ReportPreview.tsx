@@ -4,6 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, Loader2, FileText, TrendingUp, AlertCircle } from "lucide-react";
 import { ReportType } from "@/types/report";
 
+import { useState, useEffect } from "react";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+
 interface ReportPreviewProps {
   type: ReportType;
   data: any[];
@@ -12,6 +15,16 @@ interface ReportPreviewProps {
 }
 
 export function ReportPreview({ type, data, isLoading, aiInsights }: ReportPreviewProps) {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  
+  // Reset page when data changes (e.g. new report type or filters)
+  useEffect(() => {
+    setPage(1);
+  }, [type, data]);
+
+  const totalPages = Math.ceil(data.length / pageSize);
+  const paginatedData = data.slice((page - 1) * pageSize, page * pageSize);
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-xl border-muted">
@@ -68,7 +81,7 @@ export function ReportPreview({ type, data, isLoading, aiInsights }: ReportPrevi
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.map((row, idx) => (
+                {paginatedData.map((row, idx) => (
                   <TableRow key={idx}>
                     {Object.values(row).map((val: any, i) => (
                       <TableCell key={i} className="text-sm py-3 font-medium">
@@ -81,6 +94,37 @@ export function ReportPreview({ type, data, isLoading, aiInsights }: ReportPrevi
             </Table>
           </div>
         </CardContent>
+        {totalPages > 1 && (
+          <div className="p-4 border-t bg-muted/20 flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => (
+                  <PaginationItem key={i}>
+                    <PaginationLink 
+                      onClick={() => setPage(i + 1)}
+                      isActive={page === i + 1}
+                      className="cursor-pointer"
+                    >
+                      {i + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </Card>
     </div>
   );

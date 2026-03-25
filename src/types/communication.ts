@@ -24,10 +24,13 @@ export interface CommunicationLog {
   id: string;
   caseId: string;
   clientId: string;
-  sender: string;
+  sender?: string;
   receiver: string;
-  content: string;
+  type: string;
+  summary: string;
+  content?: string;
+  notes?: string;
   channel: NotificationChannel;
-  status: 'Delivered' | 'Failed' | 'Read';
+  status: 'Delivered' | 'Failed' | 'Read' | 'Sent';
   timestamp: string;
 }

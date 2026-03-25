@@ -26,9 +26,9 @@ export interface CourtOrder {
   sourceUrl?: string;
 }
 
-export interface SyncLog {
+export interface CourtSyncLog {
   id: string;
-  caseId: string;
+  caseId?: string;
   cnrNumber: string;
   status: SyncStatus;
   message: string;

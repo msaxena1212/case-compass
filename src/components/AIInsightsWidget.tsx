@@ -1,11 +1,21 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lightbulb, AlertTriangle, TrendingUp, ArrowRight } from "lucide-react";
-import { AIInsight } from "@/store/mockData";
+import { Lightbulb, AlertTriangle, TrendingUp, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-export function AIInsightsWidget({ insights }: { insights: AIInsight[] }) {
+export function AIInsightsWidget({ insights, isLoading }: { insights: any[], isLoading?: boolean }) {
   const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <Card className="border-accent/40 bg-gradient-to-br from-accent/5 to-transparent overflow-hidden">
+        <CardContent className="p-8 flex flex-col items-center justify-center gap-3">
+           <Sparkles className="h-6 w-6 text-accent animate-pulse" />
+           <p className="text-[10px] uppercase font-bold text-muted-foreground animate-pulse tracking-widest">Synthesizing Strategic Intelligence...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!insights || insights.length === 0) return null;
 

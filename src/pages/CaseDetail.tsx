@@ -1,8 +1,3 @@
-import { AppLayout } from "@/components/AppLayout";
-import { useParams, useNavigate } from "react-router-dom";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { 
   Briefcase, 
   Calendar, 
@@ -16,26 +11,90 @@ import {
   Plus,
   ArrowLeft,
   Activity,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from "lucide-react";
-import { mockCases, mockHearings, mockClients, mockTimeline, calculateHealthScore } from "@/store/mockData";
+import { useQuery } from "@tanstack/react-query";
+import { useParams, useNavigate } from "react-router-dom";
+import { caseService } from "@/services/caseService";
+import { courtService } from "@/services/courtService";
+import { documentService } from "@/services/documentService";
+import { taskService } from "@/services/taskService";
+import { calculateHealthScore } from "@/utils/caseUtils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useState } from "react";
 import { CreateHearingModal } from "@/components/CreateHearingModal";
 import { UpdateHearingModal } from "@/components/UpdateHearingModal";
+import { formatDate, formatTime } from "@/utils/formatters";
+import { AppLayout } from "@/components/AppLayout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [isAddHearingOpen, setIsAddHearingOpen] = useState(false);
-  const [updateHearingId, setUpdateHearingId] = useState<string | null>(null);
+  const { data: caseData, isLoading: loadingCase, error: caseError } = useQuery({
+    queryKey: ['case', id],
+    queryFn: () => caseService.getCaseById(id || ''),
+    enabled: !!id
+  });
 
-  const caseData = mockCases.find(c => c.id === id);
-  const client = mockClients.find(cli => cli.id === caseData?.clientId);
-  const hearings = mockHearings.filter(h => h.caseId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const caseTimeline = mockTimeline.filter(t => t.caseId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const [updateHearingId, setUpdateHearingId] = useState<string | null>(null);
+  const [isAddHearingOpen, setIsAddHearingOpen] = useState(false);
+  const [hearingPage, setHearingPage] = useState(1);
+  const [docPage, setDocPage] = useState(1);
+  const [taskPage, setTaskPage] = useState(1);
+  const pageSize = 10;
+
+  const { data: hearingsResponse, isLoading: loadingHearings } = useQuery({
+    queryKey: ['hearings', id, hearingPage],
+    queryFn: () => courtService.getHearingsByCase(id || '', hearingPage, pageSize),
+    enabled: !!id
+  });
+  const hearings = hearingsResponse?.data || [];
+  const totalHearings = hearingsResponse?.totalCount || 0;
+  const totalHearingPages = Math.ceil(totalHearings / pageSize);
+
+  const { data: docsResponse, isLoading: loadingDocs } = useQuery({
+    queryKey: ['documents', id, docPage],
+    queryFn: () => documentService.getDocumentsByCase(id || '', docPage, pageSize),
+    enabled: !!id
+  });
+  const documents = docsResponse?.data || [];
+  const totalDocs = docsResponse?.totalCount || 0;
+  const totalDocPages = Math.ceil(totalDocs / pageSize);
+
+  const { data: tasksResponse, isLoading: loadingTasks } = useQuery({
+    queryKey: ['tasks', id, taskPage],
+    queryFn: () => taskService.getTasksByCase(id || '', taskPage, pageSize),
+    enabled: !!id
+  });
+  const tasks = tasksResponse?.data || [];
+  const totalTasks = tasksResponse?.totalCount || 0;
+  const totalTaskPages = Math.ceil(totalTasks / pageSize);
+
+  const { data: timeline = [], isLoading: loadingTimeline } = useQuery({
+    queryKey: ['timeline', id],
+    queryFn: () => caseService.getTimeline(id || ''),
+    enabled: !!id
+  });
   
-  if (!caseData) {
+  const isLoading = loadingCase || loadingHearings || loadingDocs || loadingTasks || loadingTimeline;
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 text-accent animate-spin" />
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Loading Case Details...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!caseData || caseError) {
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center py-12">
@@ -78,7 +137,7 @@ export default function CaseDetail() {
               </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
-                <span>Filed: {new Date(caseData.filingDate).toLocaleDateString()}</span>
+                <span>Filed: {formatDate(caseData.filingDate)}</span>
               </div>
             </div>
           </div>
@@ -121,7 +180,7 @@ export default function CaseDetail() {
                             <User className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="font-medium">{caseData.opponent.petitioner}</p>
+                            <p className="font-medium">{(caseData as any).opponent?.petitioner || "Unknown"}</p>
                             <p className="text-xs text-muted-foreground">Main Client</p>
                           </div>
                         </div>
@@ -133,7 +192,7 @@ export default function CaseDetail() {
                             <User className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="font-medium">{caseData.opponent.respondent}</p>
+                            <p className="font-medium">{(caseData as any).opponent?.respondent || "Unknown"}</p>
                             <p className="text-xs text-muted-foreground">Opposing Party</p>
                           </div>
                         </div>
@@ -145,7 +204,7 @@ export default function CaseDetail() {
                             <User className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="font-medium">Adv. Kumar</p>
+                            <p className="font-medium">{(caseData as any).lawyer?.name || "Unassigned"}</p>
                             <p className="text-xs text-muted-foreground">Primary Lawyer</p>
                           </div>
                         </div>
@@ -157,7 +216,7 @@ export default function CaseDetail() {
                             <User className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="font-medium">{caseData.opponent.opposingLawyer}</p>
+                            <p className="font-medium">{(caseData as any).opponent?.opposingLawyer || "Not Disclosed"}</p>
                             <p className="text-xs text-muted-foreground">Opposing Lawyer</p>
                           </div>
                         </div>
@@ -171,7 +230,7 @@ export default function CaseDetail() {
                           <Gavel className="h-5 w-5 text-muted-foreground" />
                           <div>
                             <p className="text-xs text-muted-foreground">Judge</p>
-                            <p className="font-medium">{caseData.opponent.judge || "Not Assigned"}</p>
+                            <p className="font-medium">{(caseData as any).opponent?.judge || "Not Assigned"}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -194,7 +253,7 @@ export default function CaseDetail() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="relative space-y-6 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-[2px] before:bg-muted">
-                      {caseTimeline.length > 0 ? caseTimeline.map((item, idx) => (
+                      {timeline.length > 0 ? timeline.map((item, idx) => (
                         <div key={item.id} className="relative pl-10">
                           <div className={`absolute left-0 top-1 h-6 w-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center z-10 ${
                             item.type === 'StatusChange' ? 'bg-blue-500' : 
@@ -205,7 +264,7 @@ export default function CaseDetail() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold">{item.title}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{new Date(item.date).toLocaleDateString()} · {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{formatDate(item.date)} · {formatTime(item.date)}</p>
                             {item.description && (
                               <p className="text-sm text-muted-foreground mt-2 bg-muted/30 p-2 rounded border border-dashed">{item.description}</p>
                             )}
@@ -226,15 +285,15 @@ export default function CaseDetail() {
                     <CardTitle className="text-sm uppercase tracking-widest text-muted-foreground">Client Profile</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {client ? (
+                    {(caseData as any).client ? (
                       <div>
-                        <p className="font-bold text-lg">{client.name}</p>
-                        <p className="text-sm text-muted-foreground">{client.type} Client</p>
+                        <p className="font-bold text-lg">{(caseData as any).client.name}</p>
+                        <p className="text-sm text-muted-foreground">{(caseData as any).client.type} Client</p>
                         <div className="mt-4 space-y-2">
-                          <p className="text-xs truncate">{client.email}</p>
-                          <p className="text-xs">{client.phone}</p>
+                          <p className="text-xs truncate">{(caseData as any).client.email}</p>
+                          <p className="text-xs">{(caseData as any).client.phone}</p>
                         </div>
-                        <Button variant="outline" size="sm" className="w-full mt-4">View Full Client Profile</Button>
+                        <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => navigate(`/clients/${(caseData as any).client.id}`)}>View Full Client Profile</Button>
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Client information not available.</p>
@@ -250,7 +309,7 @@ export default function CaseDetail() {
                     {hearings.filter(h => h.status === 'Upcoming').length > 0 ? (
                       <div>
                         <p className="text-2xl font-bold font-display">
-                          {new Date(hearings.filter(h => h.status === 'Upcoming')[0].date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          {formatDate(hearings.filter(h => h.status === 'Upcoming')[0].date, { month: 'short', day: 'numeric' })}
                         </p>
                         <p className="text-sm opacity-90">{hearings.filter(h => h.status === 'Upcoming')[0].stage}</p>
                         <Button variant="secondary" size="sm" className="w-full mt-4" onClick={() => navigate('/calendar')}>Open Calendar</Button>
@@ -282,7 +341,7 @@ export default function CaseDetail() {
                   <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start gap-4">
                       <div className={`rounded-lg p-3 text-center min-w-[70px] ${h.status === 'Upcoming' ? 'bg-blue-50 text-blue-700' : 'bg-muted text-muted-foreground'}`}>
-                        <p className="text-[10px] font-bold uppercase">{new Date(h.date).toLocaleDateString('en-US', { month: 'short' })}</p>
+                        <p className="text-[10px] font-bold uppercase">{formatDate(h.date, { month: 'short' })}</p>
                         <p className="text-xl font-bold font-display">{new Date(h.date).getDate()}</p>
                       </div>
                       <div>
@@ -290,7 +349,7 @@ export default function CaseDetail() {
                            <StatusBadge status={h.status} />
                            <span className="text-xs text-muted-foreground">{h.stage}</span>
                         </div>
-                        <p className="font-semibold">{new Date(h.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {h.court}</p>
+                        <p className="font-semibold">{formatTime(h.date)} · {h.court}</p>
                         {h.outcome && (
                            <p className="text-sm mt-2 text-muted-foreground italic border-l-2 pl-3 py-1 bg-muted/10">"{h.outcome}"</p>
                         )}
@@ -312,6 +371,38 @@ export default function CaseDetail() {
                 </div>
               )}
             </div>
+
+            {totalHearingPages > 1 && (
+              <div className="mt-8 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setHearingPage(p => Math.max(1, p - 1))}
+                        className={hearingPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(totalHearingPages, 5) }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink 
+                          onClick={() => setHearingPage(i + 1)}
+                          isActive={hearingPage === i + 1}
+                          className="cursor-pointer"
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setHearingPage(p => Math.min(totalHearingPages, p + 1))}
+                        className={hearingPage === totalHearingPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </TabsContent>
 
           {/* Placeholder Tabs */}
@@ -323,40 +414,106 @@ export default function CaseDetail() {
               </Button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-               {[1, 2, 3].map(i => (
-                 <Card key={i} className="group hover:border-primary/50 transition-colors cursor-pointer">
+               {documents.map(doc => (
+                 <Card key={doc.id} className="group hover:border-primary/50 transition-colors cursor-pointer">
                     <CardContent className="p-4 flex items-center gap-4">
                        <div className="h-10 w-10 rounded bg-red-50 flex items-center justify-center text-red-600">
                          <FileText className="h-6 w-6" />
                        </div>
                        <div className="min-w-0">
-                         <p className="text-sm font-medium truncate">Legal_Petition_V{i}.pdf</p>
-                         <p className="text-[10px] text-muted-foreground uppercase">PDF · 2.4 MB · 2 days ago</p>
+                         <p className="text-sm font-medium truncate">{doc.fileName}</p>
+                         <p className="text-[10px] text-muted-foreground uppercase">{doc.fileType} · {formatDate(doc.uploadedAt)}</p>
                        </div>
                        <ChevronRight className="h-4 w-4 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </CardContent>
                  </Card>
                ))}
-            </div>
+                {documents.length === 0 && (
+                  <div className="col-span-full text-center py-12 text-muted-foreground">No documents found for this case.</div>
+                )}
+             </div>
+
+             {totalDocPages > 1 && (
+               <div className="mt-8 flex justify-center">
+                 <Pagination>
+                   <PaginationContent>
+                     <PaginationItem>
+                       <PaginationPrevious 
+                         onClick={() => setDocPage(p => Math.max(1, p - 1))}
+                         className={docPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                       />
+                     </PaginationItem>
+                     {Array.from({ length: Math.min(totalDocPages, 5) }).map((_, i) => (
+                       <PaginationItem key={i}>
+                         <PaginationLink 
+                           onClick={() => setDocPage(i + 1)}
+                           isActive={docPage === i + 1}
+                           className="cursor-pointer"
+                         >
+                           {i + 1}
+                         </PaginationLink>
+                       </PaginationItem>
+                     ))}
+                     <PaginationItem>
+                       <PaginationNext 
+                         onClick={() => setDocPage(p => Math.min(totalDocPages, p + 1))}
+                         className={docPage === totalDocPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                       />
+                     </PaginationItem>
+                   </PaginationContent>
+                 </Pagination>
+               </div>
+             )}
           </TabsContent>
 
           <TabsContent value="tasks" className="space-y-6">
             <h2 className="text-xl font-bold">Tasks & Deadlines</h2>
             <div className="space-y-3">
-               {[
-                 { title: "Review opposing witness list", due: "Tomorrow" },
-                 { title: "Draft rejoinder for IP clause", due: "March 25, 2026" },
-                 { title: "Client sign-off on affidavit", due: "Completed" }
-               ].map((task, i) => (
-                 <div key={i} className="flex items-center gap-3 p-3 bg-white border rounded-lg">
-                    <div className={`h-5 w-5 rounded border flex items-center justify-center ${task.due === 'Completed' ? 'bg-primary border-primary text-white' : 'bg-white border-muted'}`}>
-                       {task.due === 'Completed' && <CheckSquare className="h-3 w-3" />}
+               {tasks.map((task) => (
+                 <div key={task.id} className="flex items-center gap-3 p-3 bg-white border rounded-lg">
+                    <div className={`h-5 w-5 rounded border flex items-center justify-center ${task.status === 'Completed' ? 'bg-primary border-primary text-white' : 'bg-white border-muted'}`}>
+                       {task.status === 'Completed' && <CheckSquare className="h-3 w-3" />}
                     </div>
-                    <span className={`text-sm ${task.due === 'Completed' ? 'line-through text-muted-foreground' : 'font-medium'}`}>{task.title}</span>
-                    <span className="ml-auto text-xs text-muted-foreground">{task.due}</span>
+                    <span className={`text-sm ${task.status === 'Completed' ? 'line-through text-muted-foreground' : 'font-medium'}`}>{task.title}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">{task.status === 'Completed' ? 'Completed' : formatDate(task.dueDate)}</span>
                  </div>
                ))}
-            </div>
+                {tasks.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground">No tasks assigned to this case.</div>
+                )}
+             </div>
+
+             {totalTaskPages > 1 && (
+               <div className="mt-8 flex justify-center">
+                 <Pagination>
+                   <PaginationContent>
+                     <PaginationItem>
+                       <PaginationPrevious 
+                         onClick={() => setTaskPage(p => Math.max(1, p - 1))}
+                         className={taskPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                       />
+                     </PaginationItem>
+                     {Array.from({ length: Math.min(totalTaskPages, 5) }).map((_, i) => (
+                       <PaginationItem key={i}>
+                         <PaginationLink 
+                           onClick={() => setTaskPage(i + 1)}
+                           isActive={taskPage === i + 1}
+                           className="cursor-pointer"
+                         >
+                           {i + 1}
+                         </PaginationLink>
+                       </PaginationItem>
+                     ))}
+                     <PaginationItem>
+                       <PaginationNext 
+                         onClick={() => setTaskPage(p => Math.min(totalTaskPages, p + 1))}
+                         className={taskPage === totalTaskPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                       />
+                     </PaginationItem>
+                   </PaginationContent>
+                 </Pagination>
+               </div>
+             )}
           </TabsContent>
 
           <TabsContent value="notes" className="space-y-6">

@@ -18,8 +18,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { MessageCircle, Mail, Smartphone, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { communicationService } from "@/services/communicationService";
+import { clientService } from "@/services/clientService";
+import { caseService } from "@/services/caseService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { NotificationChannel } from "@/types/communication";
-import { mockClients, mockCases, mockCommunicationLogs } from "@/store/mockData";
 
 interface SendCommunicationModalProps {
   open: boolean;
@@ -34,6 +37,32 @@ export function SendCommunicationModal({ open, onOpenChange, caseId: initialCase
   const [channel, setChannel] = useState<NotificationChannel>("WhatsApp");
   const [content, setContent] = useState("");
   const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients'],
+    queryFn: clientService.getAllClients,
+    enabled: open
+  });
+
+  const { data: cases = [] } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases,
+    enabled: open
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: (newLog: any) => communicationService.logCommunication(newLog),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['communication-logs'] });
+      toast.success(`Message sent successfully via ${channel}.`);
+      setContent("");
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to send message: ${error.message}`);
+    }
+  });
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,38 +71,33 @@ export function SendCommunicationModal({ open, onOpenChange, caseId: initialCase
       return;
     }
 
-    const targetClient = mockClients.find(c => c.id === clientId);
+    const targetClient = clients.find((c: any) => c.id === clientId);
     
-    // Create log entry
     const newLog = {
-      id: `log_${Date.now()}`,
-      caseId: caseId || "none",
-      clientId: clientId,
+      case_id: caseId !== "none" ? (caseId || null) : null,
+      client_id: clientId,
       sender: "Adv. Kumar",
       receiver: targetClient?.name || "Client",
       content: content,
       channel: channel,
-      status: "Delivered" as const,
-      timestamp: new Date().toISOString()
+      status: "Delivered",
+      timestamp: new Date().toISOString(),
+      type: channel === 'Email' ? 'Email' : 'WhatsApp',
+      summary: content.slice(0, 50) + "..."
     };
 
-    mockCommunicationLogs.unshift(newLog);
-    toast.success(`Message sent successfully via ${channel}.`);
-    
-    // Clear form
-    setContent("");
-    onOpenChange(false);
+    sendMutation.mutate(newLog as any);
   };
 
   const generateWithAi = () => {
-    if (!caseId) {
+    if (!caseId || caseId === "none") {
       toast.error("Please select a case first to generate smart content.");
       return;
     }
     
     setIsAiGenerating(true);
     setTimeout(() => {
-      const targetCase = mockCases.find(c => c.id === caseId);
+      const targetCase = cases.find((c: any) => c.id === caseId);
       setContent(`Dear Client, regarding the case "${targetCase?.title}", we wanted to update you that the recent hearing outcomes have been favorable. We are proceeding with the next stage of documentation and will keep you posted.`);
       setIsAiGenerating(false);
       toast.info("AI generated a draft based on the case profile.");
@@ -101,7 +125,7 @@ export function SendCommunicationModal({ open, onOpenChange, caseId: initialCase
                   <SelectValue placeholder="Select client" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockClients.map(c => (
+                  {clients.map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -115,7 +139,7 @@ export function SendCommunicationModal({ open, onOpenChange, caseId: initialCase
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">-- General --</SelectItem>
-                  {mockCases.map(c => (
+                  {cases.map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
                   ))}
                 </SelectContent>

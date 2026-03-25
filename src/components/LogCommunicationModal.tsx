@@ -4,7 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
-import { mockCommunications, mockCases, generateId } from "@/store/mockData";
+import { communicationService } from "@/services/communicationService";
+import { caseService } from "@/services/caseService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Communication, CommunicationType } from "@/types/client";
 import { toast } from "sonner";
 import { MessageSquarePlus } from "lucide-react";
@@ -24,6 +26,37 @@ export function LogCommunicationModal({ isOpen, onClose, clientId, defaultCaseId
   const [notes, setNotes] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: cases = [] } = useQuery({
+    queryKey: ['cases'],
+    queryFn: caseService.getAllCases,
+    enabled: isOpen
+  });
+
+  const logMutation = useMutation({
+    mutationFn: (newComm: any) => communicationService.logCommunication(newComm),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['communication-logs'] });
+      toast.success(`${type} logged successfully`);
+      
+      if (followUpDate) {
+        toast.info(`Follow-up reminder set for ${new Date(followUpDate).toLocaleDateString()}`);
+      }
+
+      setSummary('');
+      setNotes('');
+      setFollowUpDate('');
+      setType('Call');
+      setIsSubmitting(false);
+      onSuccess?.();
+      onClose();
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to log interaction: ${error.message}`);
+      setIsSubmitting(false);
+    }
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,33 +68,22 @@ export function LogCommunicationModal({ isOpen, onClose, clientId, defaultCaseId
 
     setIsSubmitting(true);
 
-    const newComm: Communication = {
-      id: generateId('comm'),
-      clientId,
-      caseId: caseId || undefined,
+    const newComm = {
+      client_id: clientId,
+      case_id: caseId || null,
       type,
       date: new Date().toISOString(),
       summary,
       notes,
-      followUpDate: followUpDate ? new Date(followUpDate).toISOString() : undefined,
-      loggedBy: 'Current User', // In real app, fetch from auth context
+      follow_up_date: followUpDate ? new Date(followUpDate).toISOString() : null,
+      logged_by: 'Current User', // In real app, fetch from auth context
+      channel: type,
+      status: 'Delivered',
+      sender: 'Adv. Kumar',
+      content: summary
     };
 
-    mockCommunications.unshift(newComm); // Add to beginning for timeline
-    toast.success(`${type} logged successfully`);
-
-    // Only set follow-up reminder if date provided
-    if (followUpDate) {
-      toast.info(`Follow-up reminder set for ${new Date(followUpDate).toLocaleDateString()}`);
-    }
-
-    setSummary('');
-    setNotes('');
-    setFollowUpDate('');
-    setType('Call');
-    setIsSubmitting(false);
-    onSuccess?.();
-    onClose();
+    logMutation.mutate(newComm as any);
   };
 
   return (
@@ -100,7 +122,7 @@ export function LogCommunicationModal({ isOpen, onClose, clientId, defaultCaseId
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">General (No Case)</option>
-                {mockCases.map(c => (
+                {cases.map((c: any) => (
                   <option key={c.id} value={c.id}>{c.title}</option>
                 ))}
               </select>
