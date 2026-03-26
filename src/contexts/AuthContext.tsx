@@ -19,25 +19,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    async function initSession() {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (mounted) {
-          if (error) console.error("AuthContext: getSession error:", error);
-          setSession(session);
-          setUser(session?.user ?? null);
-          setIsLoading(false);
-        }
-      } catch (err) {
-        if (mounted) {
-          console.error("AuthContext: getSession exception:", err);
-          setIsLoading(false);
-        }
-      }
-    }
-
-    initSession();
-
+    // Use onAuthStateChange as the primary source of truth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log(`AuthContext: Auth event [${event}]`, session ? "Session active" : "No session");
       if (mounted) {
@@ -45,6 +27,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         setIsLoading(false);
       }
+    });
+
+    // Initial check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+      }
+    }).catch(err => {
+      console.error("AuthContext: getSession error", err);
+      if (mounted) setIsLoading(false);
     });
 
     return () => {

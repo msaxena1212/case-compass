@@ -39,17 +39,19 @@ export function SendCommunicationModal({ open, onOpenChange, caseId: initialCase
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: clients = [] } = useQuery({
+  const { data: clientsResponse } = useQuery({
     queryKey: ['clients'],
     queryFn: clientService.getAllClients,
     enabled: open
   });
+  const clients = clientsResponse?.data || [];
 
-  const { data: cases = [] } = useQuery({
+  const { data: casesResponse } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases,
+    queryFn: () => caseService.getAllCases(1, 1000),
     enabled: open
   });
+  const cases = casesResponse?.data || [];
 
   const sendMutation = useMutation({
     mutationFn: (newLog: any) => communicationService.logCommunication(newLog),

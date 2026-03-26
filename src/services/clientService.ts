@@ -8,13 +8,32 @@ export const clientService = {
 
     const { data, error, count } = await supabase
       .from('clients')
-      .select('*', { count: 'exact' })
+      .select('*, cases(id)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(from, to);
 
     if (error) throw error;
     return {
-      data: data as CRMClient[],
+      data: (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name || 'Unknown Client',
+        email: c.email || '',
+        phone: c.phone || '',
+        address: c.address || '',
+        type: c.type || 'Individual',
+        status: c.status || 'Active',
+        tags: c.tags || [],
+        notes: c.notes || '',
+        since: c.created_at ? new Date(c.created_at).getFullYear().toString() : new Date().getFullYear().toString(),
+        avatar: c.name ? c.name.split(' ').map((n: any) => n[0]).join('').substring(0, 2).toUpperCase() : '??',
+        avatarUrl: c.avatar_url,
+        linkedCaseIds: (c.cases || []).map((cs: any) => cs.id),
+        healthScore: c.health_score || 0,
+        totalBilled: c.total_billed || 0,
+        outstandingAmount: c.outstanding_amount || 0,
+        createdAt: c.created_at,
+        parentClientId: c.parent_client_id || null
+      })) as CRMClient[],
       totalCount: count || 0
     };
   },
@@ -48,6 +67,7 @@ export const clientService = {
       outstandingAmount: data.outstanding_amount,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
+      parentClientId: data.parent_client_id || null,
       cases: (data.cases || []).map((c: any) => ({
         id: c.id,
         title: c.title,
@@ -89,7 +109,7 @@ export const clientService = {
 
     const { data, error, count } = await supabase
       .from('communications')
-      .select('*', { count: 'exact' })
+      .select('*, profile:profiles(name)', { count: 'exact' })
       .eq('client_id', clientId)
       .order('date', { ascending: false })
       .range(from, to);
@@ -100,12 +120,12 @@ export const clientService = {
         id: c.id,
         clientId: c.client_id,
         caseId: c.case_id,
-        type: c.type,
+        type: c.type || 'Email',
         date: c.date,
-        summary: c.summary,
-        notes: c.notes,
+        summary: c.summary || '',
+        notes: c.notes || '',
         followUpDate: c.follow_up_date,
-        loggedBy: c.logged_by
+        loggedBy: (c as any).profile?.name || c.logged_by || 'System'
       })) as Communication[],
       totalCount: count || 0
     };
@@ -127,5 +147,56 @@ export const clientService = {
       email: c.email,
       linkedCaseId: c.linked_case_id
     })) as Contact[];
+  },
+
+  async getSubClients(parentId: string) {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('parent_client_id', parentId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []).map((c: any) => ({
+      id: c.id,
+      name: c.name || 'Unknown',
+      email: c.email || '',
+      phone: c.phone || '',
+      address: c.address || '',
+      type: c.type || 'Individual',
+      status: c.status || 'Active',
+      tags: c.tags || [],
+      notes: c.notes || '',
+      since: c.created_at ? new Date(c.created_at).getFullYear().toString() : new Date().getFullYear().toString(),
+      avatar: c.name ? c.name.split(' ').map((n: any) => n[0]).join('').substring(0, 2).toUpperCase() : '??',
+      avatarUrl: c.avatar_url,
+      linkedCaseIds: [],
+      healthScore: c.health_score || 0,
+      totalBilled: c.total_billed || 0,
+      outstandingAmount: c.outstanding_amount || 0,
+      createdAt: c.created_at,
+      parentClientId: c.parent_client_id
+    })) as CRMClient[];
+  },
+
+  async createSubClient(parentId: string, clientData: { name: string; email: string; phone: string; type: string; notes?: string }) {
+    const { data, error } = await supabase
+      .from('clients')
+      .insert([{
+        name: clientData.name,
+        email: clientData.email,
+        phone: clientData.phone,
+        type: clientData.type,
+        notes: clientData.notes || '',
+        status: 'Active',
+        tags: [],
+        parent_client_id: parentId,
+        health_score: 70
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };

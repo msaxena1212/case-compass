@@ -13,6 +13,7 @@ import {
   Bot,
   Building2,
   ShieldCheck,
+  Palette,
   Plug,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -45,8 +46,10 @@ const managementNav = [
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Contracts", url: "/contracts", icon: FileText },
   { title: "Firm Management", url: "/firm", icon: Building2 },
+  { title: "Brand & Templates", url: "/brand", icon: Palette },
+  { title: "Integrations", url: "/integrations", icon: Plug },
   { title: "Security Center", url: "/security", icon: ShieldCheck },
-  { title: "Integration Hub", url: "/integrations", icon: Plug },
+  { title: "Reporting", url: "/reports", icon: BarChart3 },
 ];
 
 const insightsNav = [
@@ -54,18 +57,21 @@ const insightsNav = [
   { title: "Knowledge Base", url: "/knowledge", icon: BookOpen },
   { title: "AI Assistant", url: "/ai-assistant", icon: Bot },
   { title: "Court Tracker", url: "/court-tracker", icon: Scale },
-  { title: "Reporting", url: "/reports", icon: BarChart3 },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+
+  console.log("AppSidebar: current path", location.pathname);
+
   const isActive = (path: string) =>
     path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
 
-  const renderItems = (items: typeof mainNav) =>
-    items.map((item) => (
+  const renderNavItems = (items: { title: string; url: string; icon: any }[]) => {
+    console.log(`Rendering ${items.length} items for group`);
+    return items.map((item) => (
       <SidebarMenuItem key={item.title}>
         <SidebarMenuButton asChild isActive={isActive(item.url)}>
           <NavLink
@@ -80,6 +86,7 @@ export function AppSidebar() {
         </SidebarMenuButton>
       </SidebarMenuItem>
     ));
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -107,7 +114,7 @@ export function AppSidebar() {
             Core
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(mainNav)}</SidebarMenu>
+            <SidebarMenu>{renderNavItems(mainNav)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -116,7 +123,7 @@ export function AppSidebar() {
             Management
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(managementNav)}</SidebarMenu>
+            <SidebarMenu>{renderNavItems(managementNav)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -125,7 +132,7 @@ export function AppSidebar() {
             Insights
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(insightsNav)}</SidebarMenu>
+            <SidebarMenu>{renderNavItems(insightsNav)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

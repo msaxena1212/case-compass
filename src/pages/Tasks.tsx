@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { CreateTaskModal } from "@/components/CreateTaskModal";
-import { StartWorkflowModal } from "@/components/StartWorkflowModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,8 +8,8 @@ import { taskService } from "@/services/taskService";
 import { caseService } from "@/services/caseService";
 import { AppTask, TaskStatus } from "@/types/task";
 import { 
-  CheckCircle2, Clock, ListTodo, Plus, Workflow, 
-  AlertCircle, BarChart3, User, Archive, Loader2 
+  CheckCircle2, Clock, ListTodo, Plus, 
+  AlertCircle, BarChart3, User, Archive, Loader2, Trash2 
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/utils/formatters";
@@ -34,7 +33,6 @@ const getPriorityColor = (priority: string) => {
 
 export default function Tasks() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'Team' | 'My Tasks'>('Team');
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -56,7 +54,17 @@ export default function Tasks() {
       taskService.updateTaskStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task updated');
     }
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: (id: string) => taskService.deleteTask(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task deleted');
+    },
+    onError: () => toast.error('Failed to delete task')
   });
 
   // Filter tasks based on view mode
@@ -113,6 +121,9 @@ export default function Tasks() {
                <CheckCircle2 className="h-4 w-4 text-muted-foreground hover:text-success" />
              </Button>
           )}
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={(e) => { e.stopPropagation(); if (confirm('Delete this task?')) deleteTaskMutation.mutate(task.id); }}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
         
         <h4 className="font-semibold text-sm leading-snug mb-1">{task.title}</h4>
@@ -144,15 +155,12 @@ export default function Tasks() {
         {/* Header Area */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-display font-semibold tracking-tight">Task & Workflow Management</h1>
+            <h1 className="text-2xl font-display font-semibold tracking-tight">Task Management</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Automate case pipelines, assign work, and track execution across your firm.
+              Assign work and track execution across your firm.
             </p>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            <Button variant="outline" className="gap-2 shrink-0 border-accent text-accent hover:bg-accent/10" onClick={() => setIsWorkflowModalOpen(true)}>
-              <Workflow className="h-4 w-4" /> Start Workflow
-            </Button>
+          <div className="flex gap-2">
             <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 shrink-0" onClick={() => setIsTaskModalOpen(true)}>
               <Plus className="h-4 w-4" /> Add Task
             </Button>
@@ -299,11 +307,6 @@ export default function Tasks() {
       <CreateTaskModal 
         open={isTaskModalOpen} 
         onOpenChange={setIsTaskModalOpen} 
-        onComplete={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} 
-      />
-      <StartWorkflowModal
-        open={isWorkflowModalOpen}
-        onOpenChange={setIsWorkflowModalOpen}
         onComplete={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} 
       />
     </AppLayout>

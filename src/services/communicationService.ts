@@ -55,7 +55,7 @@ export const communicationService = {
 
     const { data, error, count } = await supabase
       .from('communications')
-      .select('*, client:clients(name)', { count: 'exact' })
+      .select('*, client:clients(name), profile:profiles(name)', { count: 'exact' })
       .order('date', { ascending: false })
       .range(from, to);
 
@@ -64,6 +64,7 @@ export const communicationService = {
       data: (data || []).map(log => ({
         ...log,
         receiver: log.client?.name || 'Unknown Client',
+        loggedBy: (log as any).profile?.name || log.logged_by || 'System',
         timestamp: log.date // Mapping date to timestamp for the UI
       })) as (CommunicationLog & { receiver: string })[],
       totalCount: count || 0

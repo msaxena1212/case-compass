@@ -14,9 +14,10 @@ type RecordPaymentModalProps = {
   onClose: () => void;
   invoiceId?: string;
   onSuccess?: () => void;
+  onCreateInvoice?: () => void;
 };
 
-export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceId, onSuccess }: RecordPaymentModalProps) {
+export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceId, onSuccess, onCreateInvoice }: RecordPaymentModalProps) {
   const [invoiceId, setInvoiceId] = useState(defaultInvoiceId || '');
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState<PaymentMode>('Bank Transfer');
@@ -24,11 +25,13 @@ export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceI
   const queryClient = useQueryClient();
 
   // Fetch all invoices
-  const { data: invoices = [] } = useQuery({
-    queryKey: ['invoices'],
-    queryFn: billingService.getAllInvoices,
+  const { data: invoicesResponse, isLoading: isLoadingInvoices } = useQuery({
+    queryKey: ['invoices-lookup'],
+    queryFn: () => billingService.getAllInvoices(1, 1000),
     enabled: isOpen
   });
+  const invoicesLoading = isLoadingInvoices;
+  const invoices = invoicesResponse?.data || [];
 
   // Fetch all payments to calculate balances
   const { data: allPayments = [] } = useQuery({
@@ -135,6 +138,22 @@ export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceI
                 );
               })}
             </select>
+            {eligibleInvoices.length === 0 && !invoicesLoading && (
+              <div className="mt-2 p-3 bg-amber-50 border border-amber-100 rounded-md">
+                <p className="text-xs text-amber-700 font-medium">No open invoices found for recording payments.</p>
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  className="p-0 h-auto text-xs text-amber-800 underline decoration-amber-800/30 hover:decoration-amber-800 font-bold mt-1"
+                  onClick={() => {
+                    onClose();
+                    onCreateInvoice?.();
+                  }}
+                >
+                  Create a new invoice instead
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

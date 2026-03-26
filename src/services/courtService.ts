@@ -9,16 +9,25 @@ export const courtService = {
 
     const { data, error, count } = await supabase
       .from('hearings')
-      .select('*, case:cases(title)', { count: 'exact' })
+      .select('*, case:cases(title, status)', { count: 'exact' })
       .order('date', { ascending: true })
       .range(from, to);
 
     if (error) throw error;
     return {
       data: (data || []).map(h => ({
-        ...h,
-        caseTitle: h.case?.title
-      })) as Hearing[],
+        id: h.id,
+        caseId: h.case_id,
+        title: h.title,
+        date: h.date,
+        court: h.court,
+        judge: h.judge,
+        stage: h.stage,
+        status: h.status,
+        notes: h.notes,
+        caseTitle: h.case?.title,
+        caseStatus: h.case?.status
+      })) as (Hearing & { caseTitle?: string, caseStatus?: string })[],
       totalCount: count || 0
     };
   },

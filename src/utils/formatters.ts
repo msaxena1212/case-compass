@@ -1,5 +1,5 @@
 /**
- * Global formatting utilities for Case Compass
+ * Global formatting utilities for LegalDesk
  */
 
 /**

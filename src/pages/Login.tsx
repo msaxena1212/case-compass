@@ -43,7 +43,7 @@ export default function Login() {
       }
 
       if (data.session) {
-        toast.success("Welcome back to Case Compass");
+        toast.success("Welcome back to LegalDesk");
         navigate("/", { replace: true });
       } else {
         toast.info("Account created, but requires confirmation. Please check your Supabase dashboard.");
@@ -73,7 +73,7 @@ export default function Login() {
           <div className="h-12 w-12 rounded-2xl bg-accent flex items-center justify-center text-white shadow-lg shadow-accent/20 mb-2">
             <Scale className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-display font-bold tracking-tight text-slate-900">Case Compass</h1>
+          <h1 className="text-2xl font-display font-bold tracking-tight text-slate-900">LegalDesk</h1>
           <p className="text-sm text-muted-foreground">The Enterprise Legal Operating System</p>
         </div>
 
@@ -146,7 +146,7 @@ export default function Login() {
         </Card>
 
         <p className="text-center text-[10px] text-muted-foreground font-medium leading-relaxed">
-          Authorized personnel only. All access attempts are logged per Case Compass security policy (GDPR & ISO27001).
+          Authorized personnel only. All access attempts are logged per LegalDesk security policy (GDPR & ISO27001).
         </p>
       </div>
     </div>

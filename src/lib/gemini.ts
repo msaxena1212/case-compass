@@ -1,36 +1,86 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// Re-purposed to use local Ollama with GLM-5: cloud instead of Gemini API
 
-// TEMPORARY HARDCODE - Env variables are not being picked up by Vite on this system
-const apiKey = "AIzaSyD6HQ3C-8zeCanJ9PLDCxxLTbQgOJfR1P0";
+export const isGeminiAvailable = true;
 
-// Simple check to see if the API key is provided and looks like a real key
-export const isGeminiAvailable = !!apiKey && apiKey.length > 20 && !apiKey.startsWith("YOUR_");
+const OLLAMA_URL = "http://localhost:11434/api/generate";
+const DEFAULT_MODEL = "glm-5:cloud";
 
-const genAI = new GoogleGenerativeAI(apiKey || "");
-
-export async function generateLegalContent(prompt: string, modelName: string = "gemini-3.1-flash-lite-preview") {
+export async function generateLegalContent(prompt: string, modelName: string = DEFAULT_MODEL) {
   try {
-    const model = genAI.getGenerativeModel({ model: modelName });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+    const response = await fetch(OLLAMA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelName,
+        prompt: prompt,
+        stream: false
+      })
+    });
+    
+    if (!response.ok) {
+      let errText = response.statusText;
+      try {
+        const errJson = await response.json();
+        if (errJson.error) errText = errJson.error;
+      } catch (e) {}
+      throw new Error(`Ollama API error: ${errText}`);
+    }
+    
+    const data = await response.json();
+    return data.response;
   } catch (error) {
-    console.error("Gemini AI Generation Error:", error);
+    console.error("Local AI Generation Error:", error);
     throw error;
   }
 }
 
-export async function* generateLegalContentStream(prompt: string, modelName: string = "gemini-3.1-flash-lite-preview") {
+export async function* generateLegalContentStream(prompt: string, modelName: string = DEFAULT_MODEL) {
   try {
-    const model = genAI.getGenerativeModel({ model: modelName });
-    const result = await model.generateContentStream(prompt);
-    
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
-      yield chunkText;
+    const response = await fetch(OLLAMA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelName,
+        prompt: prompt,
+        stream: true
+      })
+    });
+
+    if (!response.ok || !response.body) {
+      let errText = response.statusText;
+      try {
+        const errJson = await response.clone().json();
+        if (errJson.error) errText = errJson.error;
+      } catch (e) {}
+      throw new Error(`Ollama API error: ${errText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.response) {
+            yield parsed.response;
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
     }
   } catch (error) {
-    console.error("Gemini AI Streaming Error:", error);
+    console.error("Local AI Streaming Error:", error);
     throw error;
   }
 }

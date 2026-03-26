@@ -10,6 +10,7 @@ import * as z from "zod";
 import { Hearing, HearingStatus } from "@/types/hearing";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AlertTriangle } from "lucide-react";
 
 const updateHearingSchema = z.object({
   outcome: z.string().min(1, "Outcome is required"),
@@ -20,6 +21,9 @@ const updateHearingSchema = z.object({
   nextDate: z.string().optional(),
   nextTime: z.string().optional(),
   nextStage: z.string().optional(),
+  
+  // Case Update Details
+  newCaseStatus: z.string().optional(),
 });
 
 type UpdateHearingModalProps = {
@@ -30,17 +34,19 @@ type UpdateHearingModalProps = {
 };
 
 import { courtService } from "@/services/courtService";
+import { caseService } from "@/services/caseService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export function UpdateHearingModal({ isOpen, onClose, hearingId, onSuccess }: UpdateHearingModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: hearings = [], isLoading } = useQuery({
+  const { data: hearingsResponse, isLoading } = useQuery({
     queryKey: ['hearings'],
-    queryFn: courtService.getAllHearings,
+    queryFn: () => courtService.getAllHearings(1, 1000),
     enabled: isOpen
   });
+  const hearings = hearingsResponse?.data || [];
 
   const hearing = hearingId ? hearings.find((h: any) => h.id === hearingId) : null;
 
@@ -79,10 +85,18 @@ export function UpdateHearingModal({ isOpen, onClose, hearingId, onSuccess }: Up
         await courtService.createHearing(newHearing as any);
         toast.success("Hearing marked complete & next date scheduled!");
       } else {
-        toast.success("Hearing marked complete!");
+        // If not scheduling next, optionally update case status
+        if (!data.scheduleNext && data.newCaseStatus) {
+           await caseService.updateCase(hearing.caseId, { status: data.newCaseStatus as any });
+           toast.success(`Hearing completed & Case marked as ${data.newCaseStatus}!`);
+        } else {
+           toast.success("Hearing marked complete!");
+        }
       }
       
       queryClient.invalidateQueries({ queryKey: ['hearings'] });
+      // Invalidate case queries so the status updates on CaseDetail
+      queryClient.invalidateQueries({ queryKey: ['case'] });
       reset();
       onSuccess?.();
       onClose();
@@ -124,41 +138,66 @@ export function UpdateHearingModal({ isOpen, onClose, hearingId, onSuccess }: Up
           </div>
 
           <div className="border-t pt-4 mt-4">
-            <div className="flex items-center space-x-2 mb-4">
-              <Checkbox 
-                id="scheduleNext" 
-                checked={scheduleNext} 
-                onCheckedChange={(c) => setValue("scheduleNext", !!c)} 
-              />
-              <Label htmlFor="scheduleNext" className="font-medium cursor-pointer">
-                Schedule Next Hearing Date
-              </Label>
-            </div>
-
-            {scheduleNext && (
-              <div className="space-y-4 bg-muted/20 p-4 rounded-md border">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="nextDate">Date *</Label>
-                    <Input id="nextDate" type="date" {...register("nextDate")} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nextTime">Time *</Label>
-                    <Input id="nextTime" type="time" {...register("nextTime")} />
-                  </div>
+            {hearing.caseStatus !== 'Closed' && hearing.caseStatus !== 'Won' && hearing.caseStatus !== 'Lost' && hearing.caseStatus !== 'Settled' && hearing.caseStatus !== 'Withdrawn' ? (
+              <>
+                <div className="flex items-center space-x-2 mb-4">
+                  <Checkbox 
+                    id="scheduleNext" 
+                    checked={scheduleNext} 
+                    onCheckedChange={(c) => setValue("scheduleNext", !!c)} 
+                  />
+                  <Label htmlFor="scheduleNext" className="font-medium cursor-pointer">
+                    Schedule Next Hearing Date
+                  </Label>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="nextStage">Next Stage *</Label>
-                  <select id="nextStage" {...register("nextStage")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    <option value="">Select stage...</option>
-                    <option value="Framing of Issues">Framing of Issues</option>
-                    <option value="Evidence">Evidence</option>
-                    <option value="Cross Examination">Cross Examination</option>
-                    <option value="Arguments">Arguments</option>
-                    <option value="Judgment">Judgment</option>
-                  </select>
-                </div>
+                {scheduleNext ? (
+                  <div className="space-y-4 bg-muted/20 p-4 rounded-md border">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="nextDate">Date *</Label>
+                        <Input id="nextDate" type="date" {...register("nextDate")} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="nextTime">Time *</Label>
+                        <Input id="nextTime" type="time" {...register("nextTime")} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="nextStage">Next Stage *</Label>
+                      <select id="nextStage" {...register("nextStage")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                        <option value="">Select stage...</option>
+                        <option value="Framing of Issues">Framing of Issues</option>
+                        <option value="Evidence">Evidence</option>
+                        <option value="Cross Examination">Cross Examination</option>
+                        <option value="Arguments">Arguments</option>
+                        <option value="Judgment">Judgment</option>
+                        <option value="Final Hearing">Final Hearing</option>
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4 bg-amber-50/50 p-4 rounded-md border border-amber-200">
+                    <p className="text-sm font-medium text-amber-800">This will mark the current hearing as the final hearing.</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="newCaseStatus">Update Case Status (Optional)</Label>
+                      <select id="newCaseStatus" {...register("newCaseStatus")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                        <option value="">Leave status unchanged</option>
+                        <option value="Closed">Closed</option>
+                        <option value="Won">Won</option>
+                        <option value="Lost">Lost</option>
+                        <option value="Settled">Settled</option>
+                        <option value="Withdrawn">Withdrawn</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="bg-muted p-4 rounded-md border border-dashed flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground font-medium">This case is {hearing.caseStatus}. No further hearings can be scheduled.</p>
               </div>
             )}
           </div>

@@ -58,7 +58,12 @@ export function AIInsightsWidget({ insights, isLoading }: { insights: any[], isL
                 variant="ghost" 
                 size="sm" 
                 className="shrink-0 h-8 text-xs font-semibold hover:bg-transparent hover:underline underline-offset-4 px-2"
-                onClick={() => navigate(i.actionLink)}
+                onClick={() => {
+                  const rawLink = i.actionLink || '/cases';
+                  const baseRoute = rawLink.split('/')[1];
+                  const validRoutes = ['cases', 'clients', 'billing', 'analytics', 'reports', 'calendar', 'documents', 'tasks'];
+                  navigate(validRoutes.includes(baseRoute) ? `/${baseRoute}` : '/cases');
+                }}
                >
                  {i.actionText} <ArrowRight className="h-3 w-3 ml-1" />
                </Button>

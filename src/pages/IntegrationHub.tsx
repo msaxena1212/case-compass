@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
 export default function IntegrationHub() {
   const queryClient = useQueryClient();
 
@@ -54,10 +56,10 @@ export default function IntegrationHub() {
             <p className="text-sm text-muted-foreground mt-1">Connect Case Compass to your favorite legal and business tools.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="gap-2 font-bold bg-white">
+            <Button onClick={() => toast.info('API Documentation', { description: 'Developer portal documentation is currently being updated.' })} variant="outline" className="gap-2 font-bold bg-white">
               <BookOpen className="h-4 w-4" /> API Docs
             </Button>
-            <Button className="gap-2 bg-accent hover:bg-accent/90 text-accent-foreground font-bold">
+            <Button onClick={() => toast.info('Webhook Configuration', { description: 'Webhook endpoint configuration will be available soon.' })} className="gap-2 bg-accent hover:bg-accent/90 text-accent-foreground font-bold">
               <Zap className="h-4 w-4" /> Create Webhook
             </Button>
           </div>
@@ -115,7 +117,7 @@ export default function IntegrationHub() {
               <div className="p-4 bg-muted/10 border border-dashed rounded-xl flex items-center justify-center gap-3">
                 <Globe className="h-5 w-5 text-muted-foreground" />
                 <p className="text-xs font-medium text-muted-foreground">
-                  Missing an app? <Button variant="link" className="p-0 h-auto text-accent text-xs font-bold">Request a custom integration</Button>
+                  Missing an app? <Button onClick={() => toast.success('Request Received', { description: 'Our integrations team will review your request.' })} variant="link" className="p-0 h-auto text-accent text-xs font-bold">Request a custom integration</Button>
                 </p>
               </div>
             </TabsContent>
@@ -153,7 +155,7 @@ export default function IntegrationHub() {
                     <p className="text-[10px] text-muted-foreground leading-relaxed italic">
                       "Receive real-time notifications for Case Updates, Hearing Deadlines, and Invoice Payments."
                     </p>
-                    <Button variant="outline" size="sm" className="w-full mt-3 h-8 text-[10px] font-bold bg-white border-accent/20 text-accent hover:bg-accent/5">
+                    <Button onClick={() => toast.info('Configure Webhooks', { description: 'Advanced webhook configurations are coming soon.' })} variant="outline" size="sm" className="w-full mt-3 h-8 text-[10px] font-bold bg-white border-accent/20 text-accent hover:bg-accent/5">
                       Configure Webhooks
                     </Button>
                   </CardContent>
@@ -206,7 +208,7 @@ export default function IntegrationHub() {
                 </TableBody>
               </Table>
               <div className="p-4 border-t flex justify-center">
-                <Button variant="ghost" size="sm" className="text-[10px] font-bold text-muted-foreground hover:bg-muted/10 gap-2">
+                <Button onClick={() => toast.info('Load History', { description: 'Fetching historical sync logs from archive.' })} variant="ghost" size="sm" className="text-[10px] font-bold text-muted-foreground hover:bg-muted/10 gap-2">
                   <RefreshCcw className="h-3 w-3" /> Load more history
                 </Button>
               </div>

@@ -29,11 +29,12 @@ export function LogTimeModal({ isOpen, onClose, onSuccess }: LogTimeModalProps) 
   const queryClient = useQueryClient();
 
   // Fetch cases to select from
-  const { data: cases = [], isLoading: loadingCases } = useQuery({
+  const { data: casesResponse, isLoading: loadingCases } = useQuery({
     queryKey: ['cases'],
     queryFn: caseService.getAllCases,
     enabled: isOpen
   });
+  const cases = casesResponse?.data || [];
 
   const mutation = useMutation({
     mutationFn: (newEntry: Omit<TimeEntry, 'id' | 'createdAt'>) => 

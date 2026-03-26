@@ -7,7 +7,7 @@ import {
   Search, FileText, File, FileImage, Filter,
   Download, Eye, Tag, Upload, FolderOpen,
   Sparkles, Brain, Shield, Database, BarChart3, 
-  ChevronDown, Layers, Grid3X3, List, Loader2
+  ChevronDown, Layers, Grid3X3, List, Loader2, Lock
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +16,8 @@ import { formatDate } from "@/utils/formatters";
 import { LegalDocument, DocumentType } from "@/types/document";
 import { DocumentDetailPanel } from "@/components/DocumentDetailPanel";
 import { UploadDocumentModal } from "@/components/UploadDocumentModal";
+import { CompareDocumentsModal } from "@/components/CompareDocumentsModal";
+import { PasswordPromptModal } from "@/components/PasswordPromptModal";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 const fileTypeIcons: Record<string, React.ReactNode> = {
@@ -33,8 +35,11 @@ export default function Documents() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<LegalDocument | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [passwordDoc, setPasswordDoc] = useState<LegalDocument | null>(null);
   const [aiSearchMode, setAiSearchMode] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [groupByCase, setGroupByCase] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -105,50 +110,50 @@ export default function Documents() {
     <div
       key={doc.id}
       className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer items-center group"
-      onClick={() => setSelectedDoc(doc)}
+      onClick={() => {
+        if (doc.isEncrypted) {
+          setPasswordDoc(doc);
+        } else {
+          setSelectedDoc(doc);
+        }
+      }}
     >
       <div className="col-span-4 flex items-center gap-3">
         <div className="shrink-0">{fileTypeIcons[doc.fileType] || <FileText className="h-5 w-5" />}</div>
         <div className="min-w-0">
           <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{doc.fileName}</p>
           <p className="text-xs text-muted-foreground">
-            {formatDate(doc.uploadedAt)} · {doc.uploadedBy}
+            {formatDate(doc.uploadedAt)}
           </p>
         </div>
       </div>
       <div className="col-span-2">
-        <p className="text-sm truncate">{doc.caseName}</p>
-        <p className="text-xs text-muted-foreground font-mono">{doc.caseId}</p>
-      </div>
-      <div className="col-span-2">
-        <Badge variant="outline" className="text-[10px] mr-1">{doc.documentType}</Badge>
-      </div>
-      <div className="col-span-1 flex flex-wrap gap-1">
-        {doc.tags.slice(0, 2).map(tag => (
-          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{tag}</span>
-        ))}
-        {doc.tags.length > 2 && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">+{doc.tags.length - 2}</span>
-        )}
+        <p className="text-sm truncate font-medium">{doc.caseName}</p>
+        <p className="text-[10px] text-muted-foreground font-mono truncate">{doc.caseId}</p>
       </div>
       <div className="col-span-1">
-        <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">v{doc.versionNumber}</span>
+        <Badge variant="secondary" className="text-[10px] bg-muted/50 font-normal">{doc.documentType}</Badge>
       </div>
-      <div className="col-span-1 text-xs text-muted-foreground">{doc.size}</div>
-      <div className="col-span-1 flex gap-1">
-        {doc.aiSummary && (
-          <span className="text-[8px] bg-purple-100 text-purple-700 px-1 py-0.5 rounded font-bold" title="AI Processed">
-            AI
-          </span>
-        )}
-        {(doc.riskClauses?.length || 0) > 0 && (
-          <span className="text-[8px] bg-red-100 text-red-700 px-1 py-0.5 rounded font-bold" title={`${doc.riskClauses!.length} risk(s)`}>
-            ⚠{doc.riskClauses!.length}
-          </span>
-        )}
-        <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-          <Download className="h-3.5 w-3.5" />
-        </Button>
+      <div className="col-span-2">
+        <div className="flex flex-wrap gap-1">
+          {doc.tags && doc.tags.length > 0 ? doc.tags.slice(0, 2).map(tag => (
+            <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0 h-4 font-normal bg-background">{tag}</Badge>
+          )) : <span className="text-[10px] text-muted-foreground italic">No tags</span>}
+        </div>
+      </div>
+      <div className="col-span-1">
+        <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">v{doc.versionNumber}</span>
+      </div>
+      <div className="col-span-1 text-[10px] font-medium text-muted-foreground uppercase">{doc.size || 'N/A'}</div>
+      <div className="col-span-1">
+        <div className="flex items-center gap-1">
+          <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-bold border-0 uppercase tracking-tighter ${
+            doc.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+          }`}>
+            {doc.status}
+          </Badge>
+          {doc.isEncrypted && <Lock className="h-3 w-3 text-amber-600" />}
+        </div>
       </div>
     </div>
   );
@@ -175,12 +180,21 @@ export default function Documents() {
               AI-powered legal document management · Never lose a document again
             </p>
           </div>
-          <Button 
-            onClick={() => setUploadOpen(true)}
-            className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0"
-          >
-            <Upload className="h-4 w-4" /> Upload Document
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              onClick={() => setCompareOpen(true)}
+              className="gap-2 shrink-0 border-purple-200 text-purple-700 hover:bg-purple-50"
+            >
+              <Brain className="h-4 w-4" /> Compare Docs
+            </Button>
+            <Button 
+              onClick={() => setUploadOpen(true)}
+              className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 shrink-0"
+            >
+              <Upload className="h-4 w-4" /> Upload Document
+            </Button>
+          </div>
         </div>
 
         {/* Stats Bar */}
@@ -302,11 +316,11 @@ export default function Documents() {
         {!groupByCase ? (
           <Card>
             <CardContent className="p-0">
-              <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 border-b bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 border-b bg-muted/50 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 <div className="col-span-4">Document</div>
                 <div className="col-span-2">Case</div>
-                <div className="col-span-2">Type</div>
-                <div className="col-span-1">Tags</div>
+                <div className="col-span-1">Type</div>
+                <div className="col-span-2">Tags</div>
                 <div className="col-span-1">Ver</div>
                 <div className="col-span-1">Size</div>
                 <div className="col-span-1">Status</div>
@@ -388,10 +402,27 @@ export default function Documents() {
           onClose={() => setSelectedDoc(null)}
         />
 
-        {/* Upload Modal */}
         <UploadDocumentModal 
           isOpen={uploadOpen}
           onClose={() => setUploadOpen(false)}
+        />
+
+        {/* Compare Modal */}
+        <CompareDocumentsModal 
+          isOpen={compareOpen}
+          onClose={() => setCompareOpen(false)}
+          documents={documents}
+        />
+
+        {/* Password Prompt */}
+        <PasswordPromptModal 
+          isOpen={!!passwordDoc}
+          onClose={() => setPasswordDoc(null)}
+          documentName={passwordDoc?.fileName || ''}
+          onUnlock={() => {
+            if (passwordDoc) setSelectedDoc(passwordDoc);
+            setPasswordDoc(null);
+          }}
         />
       </div>
     </AppLayout>

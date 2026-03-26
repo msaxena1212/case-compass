@@ -26,6 +26,10 @@ export interface Case {
   healthScore: number; 
 }
 
+export interface AppCase extends Case {
+  lawyerName: string;
+}
+
 export interface TimelineEntry {
   id: string;
   caseId: string;

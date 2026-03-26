@@ -23,8 +23,9 @@ import CourtTracker from "./pages/CourtTracker";
 import ContractManager from "./pages/ContractManager";
 import FirmManagement from "./pages/FirmManagement";
 import SecurityCenter from "./pages/SecurityCenter";
-import IntegrationHub from "./pages/IntegrationHub";
 import Reports from "./pages/Reports";
+import BrandSettings from "./pages/BrandSettings";
+import Integrations from "./pages/Integrations";
 import SupabaseSetup from "./pages/SupabaseSetup";
 import NotFound from "./pages/NotFound";
 
@@ -32,15 +33,15 @@ const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, isLoading } = useAuth();
-  
+
   console.log("ProtectedRoute: State", { isLoading, hasSession: !!session });
 
-  if (isLoading) return <div className="h-screen w-full flex items-center justify-center font-bold text-accent">Loading Case Compass...</div>;
+  if (isLoading) return <div className="h-screen w-full flex items-center justify-center font-bold text-accent">Loading LegalDesk...</div>;
   if (!session) {
-    console.log("ProtectedRoute: No session, redirecting to login");
+    console.log("ProtectedRoute: No session, redirecting to   gin");
     return <Navigate to="/login" replace />;
   }
-  
+
   return <>{children}</>;
 };
 
@@ -71,8 +72,9 @@ const App = () => (
             <Route path="/contracts" element={<ProtectedRoute><ContractManager /></ProtectedRoute>} />
             <Route path="/firm" element={<ProtectedRoute><FirmManagement /></ProtectedRoute>} />
             <Route path="/security" element={<ProtectedRoute><SecurityCenter /></ProtectedRoute>} />
-            <Route path="/integrations" element={<ProtectedRoute><IntegrationHub /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/brand" element={<ProtectedRoute><BrandSettings /></ProtectedRoute>} />
+            <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
             <Route path="/setup" element={<SupabaseSetup />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

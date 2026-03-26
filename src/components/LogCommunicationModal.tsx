@@ -9,7 +9,8 @@ import { caseService } from "@/services/caseService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Communication, CommunicationType } from "@/types/client";
 import { toast } from "sonner";
-import { MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 type LogCommunicationModalProps = {
   isOpen: boolean;
@@ -27,12 +28,17 @@ export function LogCommunicationModal({ isOpen, onClose, clientId, defaultCaseId
   const [followUpDate, setFollowUpDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  const { data: cases = [] } = useQuery({
+  const { data: casesResponse } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases,
-    enabled: isOpen
+    queryFn: async () => {
+      const response = await caseService.getAllCases(1, 1000);
+      return (response?.data || []).filter((c: any) => c.clientId === clientId);
+    },
+    enabled: isOpen && !!clientId
   });
+  const cases = casesResponse || [];
 
   const logMutation = useMutation({
     mutationFn: (newComm: any) => communicationService.logCommunication(newComm),
@@ -69,17 +75,15 @@ export function LogCommunicationModal({ isOpen, onClose, clientId, defaultCaseId
     setIsSubmitting(true);
 
     const newComm = {
-      client_id: clientId,
-      case_id: caseId || null,
+      clientId: clientId,
+      caseId: caseId || null,
       type,
-      date: new Date().toISOString(),
       summary,
       notes,
-      follow_up_date: followUpDate ? new Date(followUpDate).toISOString() : null,
-      logged_by: 'Current User', // In real app, fetch from auth context
-      channel: type,
+      followUpDate: followUpDate ? new Date(followUpDate).toISOString() : null,
+      loggedBy: 'Adv. Kumar', // In real app, fetch from auth context
+      channel: (type === 'WhatsApp' ? 'WhatsApp' : type === 'Meeting' ? 'In-App' : type) as any,
       status: 'Delivered',
-      sender: 'Adv. Kumar',
       content: summary
     };
 
@@ -126,6 +130,15 @@ export function LogCommunicationModal({ isOpen, onClose, clientId, defaultCaseId
                   <option key={c.id} value={c.id}>{c.title}</option>
                 ))}
               </select>
+              <Button 
+                type="button" 
+                variant="link" 
+                size="sm" 
+                className="p-0 h-auto text-[10px] mt-1 flex items-center gap-1"
+                onClick={() => navigate('/cases/new')}
+              >
+                <Plus className="h-2 w-2" /> New Case
+              </Button>
             </div>
           </div>
 

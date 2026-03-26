@@ -37,11 +37,12 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
   const [dueDate, setDueDate] = useState("");
   const queryClient = useQueryClient();
 
-  const { data: cases = [] } = useQuery({
+  const { data: casesResponse } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases,
+    queryFn: () => caseService.getAllCases(1, 1000),
     enabled: open
   });
+  const cases = casesResponse?.data || [];
 
   const taskMutation = useMutation({
     mutationFn: (newTask: any) => taskService.createTask(newTask),

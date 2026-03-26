@@ -1,7 +1,7 @@
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Clock, MapPin, Search, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, MapPin, Search, AlertTriangle, Edit3 } from "lucide-react";
 import { courtService } from "@/services/courtService";
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { CreateHearingModal } from "@/components/CreateHearingModal";
 import { UpdateHearingModal } from "@/components/UpdateHearingModal";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { useNavigate } from "react-router-dom";
 
 export default function CourtCalendar() {
   const [search, setSearch] = useState("");
@@ -20,6 +21,7 @@ export default function CourtCalendar() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
     queryKey: ['hearings', page],
@@ -83,8 +85,8 @@ export default function CourtCalendar() {
           </div>
           
           <div className="flex flex-row md:flex-col gap-2 shrink-0 border-t md:border-t-0 pt-4 md:pt-0">
-            <Button variant="outline" size="sm" className="w-full">View Case</Button>
-            {h.status === 'Upcoming' && (
+            <Button variant="outline" size="sm" className="w-full" onClick={() => navigate(`/cases/${h.case_id || h.caseId}`)}>View Case</Button>
+            {h.status === 'Upcoming' && h.caseStatus !== 'Closed' && h.caseStatus !== 'Won' && h.caseStatus !== 'Lost' && h.caseStatus !== 'Settled' && h.caseStatus !== 'Withdrawn' && (
               <Button size="sm" className="w-full" onClick={() => setUpdateHearingId(h.id)}>
                 Update Outcome
               </Button>

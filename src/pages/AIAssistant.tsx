@@ -52,10 +52,11 @@ export default function AIAssistant() {
   const [streamingContent, setStreamingContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: cases = [] } = useQuery({
+  const { data: casesResponse } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases
+    queryFn: () => caseService.getAllCases(1, 1000)
   });
+  const cases = casesResponse?.data || [];
 
   const capability = aiCapabilities.find(c => c.type === selectedCapability)!;
 
@@ -125,7 +126,7 @@ export default function AIAssistant() {
         capability: selectedCapability,
         metadata: {
           confidence: 0.95,
-          sources: ['Case Compass Knowledge Bank', 'Indian Penal Code', 'Civil Procedure Code'],
+          sources: ['LegalDesk Knowledge Bank', 'Indian Penal Code', 'Civil Procedure Code'],
           disclaimer: "This AI response is for informational purposes only and does not constitute formal legal advice. Please verify with a qualified advocate."
         }
       };

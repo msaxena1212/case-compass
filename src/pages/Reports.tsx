@@ -16,6 +16,7 @@ import { reportService } from "@/services/reportService";
 import { caseService } from "@/services/caseService";
 import { billingService } from "@/services/billingService";
 import { clientService } from "@/services/clientService";
+import { courtService } from "@/services/courtService";
 import { toast } from "sonner";
 import { generateLegalContent } from "@/lib/gemini";
 import { exportToPDF, exportToExcel } from "@/utils/exportUtils";
@@ -41,39 +42,60 @@ export default function Reports() {
   
   const { data: billingResponse } = useQuery({ queryKey: ['billing-report'], queryFn: () => billingService.getAllInvoices(1, 1000) });
   const billingData = billingResponse?.data || [];
+  
+  const { data: hearingsResponse } = useQuery({ queryKey: ['hearings-report'], queryFn: () => courtService.getAllHearings(1, 1000) });
+  const hearingsData = hearingsResponse?.data || [];
 
   const { data: auditData = [] } = useQuery({ queryKey: ['audit-report', filters], queryFn: () => reportService.getAuditLogs(filters) });
 
   const reportData = useMemo(() => {
+    const selectedClientIds = Array.isArray(filters.clientId) ? filters.clientId : filters.clientId ? [filters.clientId] : [];
+    const selectedCaseIds = Array.isArray(filters.caseId) ? filters.caseId : filters.caseId ? [filters.caseId] : [];
+
     switch(selectedType) {
       case 'Case Summary':
-        return casesData.map(c => ({
-          ID: c.id.substring(0, 8),
-          Title: c.title,
-          Type: c.type,
-          Status: c.status,
-          Court: c.court,
-          FilingDate: c.filingDate
-        }));
+        return casesData
+          .filter(c => selectedClientIds.length === 0 || selectedClientIds.includes(c.clientId!))
+          .filter(c => selectedCaseIds.length === 0 || selectedCaseIds.includes(c.id))
+          .map(c => ({
+            ID: c.id.substring(0, 8),
+            Title: c.title,
+            Type: c.type,
+            Status: c.status,
+            Court: c.court,
+            FilingDate: c.filingDate
+          }));
       case 'Revenue':
-        return billingData.map(i => ({
-          Invoice: i.id.substring(0, 8),
-          Total: `₹${i.total.toLocaleString()}`,
-          Date: i.issuedDate,
-          Status: i.status
-        }));
+        return billingData
+          .filter(i => selectedClientIds.length === 0 || selectedClientIds.includes(i.clientId!))
+          .map(i => ({
+            Invoice: i.id.substring(0, 8),
+            Total: `₹${i.total.toLocaleString()}`,
+            Date: i.issuedDate,
+            Status: i.status
+          }));
       case 'Audit Log':
         return auditData.map(l => ({
           User: l.user_name || 'System',
           Action: l.action,
           Resource: l.resource,
           Status: l.status,
-          Timestamp: new Date(l.timestamp).toLocaleString()
+          Timestamp: l.timestamp ? new Date(l.timestamp).toLocaleString() : 'N/A'
         }));
+      case 'Hearing History':
+        return hearingsData
+          .filter(h => selectedCaseIds.length === 0 || selectedCaseIds.includes(h.caseId))
+          .map(h => ({
+            Date: h.date,
+            Case: h.caseTitle || 'Generic Matter',
+            Stage: h.stage,
+            Court: h.court,
+            Status: h.status
+          })).sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime());
       default:
         return [];
     }
-  }, [selectedType, casesData, billingData, auditData]);
+  }, [selectedType, casesData, billingData, auditData, hearingsData, filters]);
 
   const handleRunAI = async () => {
     if (reportData.length === 0) return;
@@ -98,27 +120,13 @@ export default function Reports() {
             <h1 className="text-3xl font-display font-bold tracking-tight text-foreground">
               Reporting & Analytics
             </h1>
-            <p className="text-muted-foreground mt-1.5 flex items-center gap-2">
-              <History className="h-4 w-4" /> Professional insights and compliance documentation for your firm.
+            <p className="text-muted-foreground mt-1.5 flex items-center gap-2 text-sm leading-relaxed">
+              Analyze firm performance, track hearing histories, and ensure regulatory compliance with automated data insights.
             </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2 h-11 px-6 rounded-xl border-border/60 hover:bg-muted/50 transition-all">
-              <Clock className="h-4 w-4" /> View History
-            </Button>
-            <Button className="gap-2 h-11 px-6 rounded-xl bg-primary text-primary-foreground shadow-lg hover:shadow-primary/20 transition-all">
-              <Plus className="h-4 w-4" /> Create Schedule
-            </Button>
           </div>
         </div>
 
-        <Tabs defaultValue="generate" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 h-12 p-1 bg-muted/50 rounded-xl mb-6">
-            <TabsTrigger value="generate" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">Generate New</TabsTrigger>
-            <TabsTrigger value="history" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">Schedules</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="generate" className="space-y-6 mt-0">
+        <div className="space-y-6 mt-6">
             {/* Report Type Selection */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {reportTypes.map(type => (
@@ -186,20 +194,8 @@ export default function Reports() {
               isLoading={false} 
               aiInsights={aiInsight}
             />
-          </TabsContent>
-
-          <TabsContent value="history">
-            <div className="flex flex-col items-center justify-center h-96 border-2 border-dashed rounded-2xl border-border/60 bg-muted/10">
-              <Calendar className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-              <h3 className="text-lg font-bold">No Scheduled Reports</h3>
-              <p className="text-sm text-muted-foreground mt-1">Automate your reporting workflow to save time.</p>
-              <Button className="mt-6 gap-2 rounded-xl h-11 px-8 shadow-lg">
-                <Plus className="h-4 w-4" /> Create Your First Schedule
-              </Button>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
+          </div>
+        </div>
     </AppLayout>
   );
 }

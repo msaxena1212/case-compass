@@ -523,9 +523,11 @@ export default function Billing() {
                   <Button variant="outline" className="flex-1 gap-2 bg-white">
                     <Download className="h-4 w-4" /> Download PDF
                   </Button>
-                  <Button className="flex-1 gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
-                    <Send className="h-4 w-4" /> Send Reminder to Client
-                  </Button>
+                  {selectedInvoice.status !== 'Paid' && (
+                    <Button className="flex-1 gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
+                      <Send className="h-4 w-4" /> Send Reminder to Client
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -535,7 +537,11 @@ export default function Billing() {
         {/* Feature Modals */}
         <LogTimeModal isOpen={timeModalOpen} onClose={() => setTimeModalOpen(false)} />
         <CreateInvoiceModal isOpen={invoiceModalOpen} onClose={() => setInvoiceModalOpen(false)} />
-        <RecordPaymentModal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} />
+        <RecordPaymentModal 
+          isOpen={paymentModalOpen} 
+          onClose={() => setPaymentModalOpen(false)} 
+          onCreateInvoice={() => setInvoiceModalOpen(true)}
+        />
         
       </div>
     </AppLayout>

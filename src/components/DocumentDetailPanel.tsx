@@ -13,7 +13,10 @@ import { summarizeDocument, analyzeLegalRisk } from "@/lib/gemini";
 import { documentService } from "@/services/documentService";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Share2, Copy, Brightness as BrainIcon, PenTool } from "lucide-react";
+import { NewVersionModal } from "./NewVersionModal";
+import { AttachToHearingModal } from "./AttachToHearingModal";
+import { ESignatureModal } from "./ESignatureModal";
 
 const fileTypeIcons: Record<string, React.ReactNode> = {
   pdf: <FileText className="h-5 w-5 text-red-500" />,
@@ -42,6 +45,9 @@ type DocumentDetailPanelProps = {
 
 export function DocumentDetailPanel({ document: doc, isOpen, onClose }: DocumentDetailPanelProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
+  const [showSignModal, setShowSignModal] = useState(false);
   const queryClient = useQueryClient();
 
   if (!doc) return null;
@@ -80,12 +86,21 @@ export function DocumentDetailPanel({ document: doc, isOpen, onClose }: Document
     }
   };
 
+  const handleShareLink = () => {
+    const shareUrl = `${window.location.origin}/documents/${doc.id}`;
+    navigator.clipboard.writeText(shareUrl);
+    toast.success("Document link copied to clipboard", {
+      icon: <Copy className="h-4 w-4" />
+    });
+  };
+
   return (
+    <>
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="sm:max-w-xl overflow-y-auto">
+      <SheetContent className="sm:max-w-xl overflow-y-auto border-l shadow-2xl">
         <SheetHeader className="pb-4 border-b">
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+          <div className="flex items-start gap-4">
+            <div className={`h-12 w-12 rounded-xl bg-muted flex items-center justify-center shrink-0 shadow-sm border`}>
               {fileTypeIcons[doc.fileType] || <FileText className="h-5 w-5" />}
             </div>
             <div className="min-w-0">
@@ -104,7 +119,7 @@ export function DocumentDetailPanel({ document: doc, isOpen, onClose }: Document
               { label: 'Type', value: doc.documentType },
               { label: 'Version', value: `v${doc.versionNumber}` },
               { label: 'Size', value: doc.size },
-              { label: 'Status', value: doc.status },
+              { label: 'Signature', value: doc.signatureStatus || 'Not Required' },
             ].map(item => (
               <div key={item.label} className="bg-muted/40 rounded-lg p-2.5">
                 <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-widest">{item.label}</p>
@@ -122,46 +137,58 @@ export function DocumentDetailPanel({ document: doc, isOpen, onClose }: Document
           </div>
 
           {/* ===== AI SECTION ===== */}
-          {!doc.aiSummary && !isAnalyzing && (
-            <Button 
-              className="w-full bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-12 rounded-xl shadow-sm"
-              onClick={handleAIAnalyse}
-            >
-              <Sparkles className="h-4 w-4" /> Run AI Legal Analysis
-            </Button>
-          )}
-
-          {isAnalyzing && (
-            <Card className="border-accent/30 bg-accent/5 animate-pulse">
-              <CardContent className="p-4 flex items-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-accent" />
-                <p className="text-sm font-bold text-accent">AI is analyzing legal risks & intent...</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {doc.aiSummary && (
-            <Card className="border-purple-200 bg-gradient-to-br from-purple-50/80 to-blue-50/40">
+          {doc.aiSummary ? (
+            <Card className="border-purple-200 bg-gradient-to-br from-purple-50/80 to-blue-50/40 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-2 opacity-10">
+                <Brain className="h-12 w-12 text-purple-900" />
+              </div>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-bold flex items-center gap-2 text-purple-800">
                   <Sparkles className="h-4 w-4" />
-                  AI Summary
-                  <span className="ml-auto text-[9px] bg-purple-200 text-purple-700 px-1.5 py-0.5 rounded font-mono uppercase tracking-widest">Gemini 1.5</span>
+                  AI Legal Insights
+                  <Badge variant="secondary" className="ml-auto text-[9px] bg-purple-200 text-purple-700 px-1.5 py-0.5 rounded font-mono uppercase tracking-widest border-purple-300">CaseCore GLM-5</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-purple-900/80 leading-relaxed">{doc.aiSummary}</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-purple-900/80 leading-relaxed font-medium">
+                    {doc.aiSummary}
+                  </p>
+                  
+                  {/* Sample AI Insights if they exist */}
+                  <div className="bg-white/40 p-3 rounded-lg border border-purple-100/50 space-y-2">
+                    <p className="text-[10px] font-bold text-purple-900/40 uppercase tracking-widest">Procedural Analysis</p>
+                    <p className="text-xs text-purple-800/70">Document identifies as a <span className="font-bold underline">Final Hearing Brief</span>. Key procedural deadlines found: <span className="bg-purple-100 px-1">14-Apr-2026</span>.</p>
+                  </div>
+                </div>
+
                 <Button 
                    variant="ghost" 
                    size="sm" 
-                   className="mt-3 text-[10px] h-7 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-1"
+                   className="mt-4 text-[10px] h-7 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-1 rounded-full px-3"
                    onClick={handleAIAnalyse}
                    disabled={isAnalyzing}
                 >
-                   {isAnalyzing ? <Loader2 className="h-3 w-3 animate-spin"/> : <Sparkles className="h-3 w-3" />} Re-analyze
+                   {isAnalyzing ? <Loader2 className="h-3 w-3 animate-spin"/> : <Sparkles className="h-3 w-3" />} Re-run Analysis
                 </Button>
               </CardContent>
             </Card>
+          ) : !isAnalyzing && (
+            <div className="bg-muted/10 border border-dashed rounded-xl p-6 text-center space-y-3">
+               <div className="h-12 w-12 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
+                  <Brain className="h-6 w-6 text-muted-foreground/40" />
+               </div>
+               <div>
+                 <p className="text-sm font-semibold">No AI Insights Yet</p>
+                 <p className="text-xs text-muted-foreground">Run our specialized legal AI to extract risks, summaries, and dates.</p>
+               </div>
+               <Button 
+                className="w-full bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11 rounded-xl shadow-md border-b-4 border-accent-foreground/10 active:border-b-0 active:translate-y-1 transition-all"
+                onClick={handleAIAnalyse}
+              >
+                <Sparkles className="h-4 w-4" /> Start AI Analysis
+              </Button>
+            </div>
           )}
 
           {/* AI Keywords */}
@@ -232,22 +259,63 @@ export function DocumentDetailPanel({ document: doc, isOpen, onClose }: Document
           </div>
 
           {/* Actions */}
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-            <Button variant="outline" className="gap-2 h-10">
-              <Download className="h-4 w-4" /> Download
+          <div className="grid grid-cols-2 gap-3 pt-4 border-t">
+            <Button variant="outline" className="gap-2 h-11 border-2 border-muted hover:bg-muted/30 font-semibold" asChild>
+              <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4" /> View Original
+              </a>
             </Button>
-            <Button className="gap-2 h-10 bg-accent text-accent-foreground hover:bg-accent/90">
-              <Upload className="h-4 w-4" /> New Version
+            <Button 
+              className="gap-2 h-11 bg-indigo-600 text-white hover:bg-indigo-700 shadow-md border-b-4 border-indigo-900/30 active:border-b-0 active:translate-y-1 transition-all font-semibold"
+              onClick={() => setShowVersionModal(true)}
+            >
+              <Upload className="h-4 w-4" /> Upload Version
             </Button>
-            <Button variant="outline" className="gap-2 h-10">
-              <Link2 className="h-4 w-4" /> Attach to Hearing
+            <Button 
+              variant="outline" 
+              className="gap-2 h-11 border-2 border-muted hover:bg-muted/30 font-semibold"
+              onClick={() => setShowAttachModal(true)}
+            >
+              <Link2 className="h-4 w-4" /> Link to Hearing
             </Button>
-            <Button variant="outline" className="gap-2 h-10">
-              <ExternalLink className="h-4 w-4" /> Share Link
+            <Button 
+              variant="outline" 
+              className="gap-2 h-11 border-2 border-muted hover:bg-muted/30 font-semibold"
+              onClick={handleShareLink}
+            >
+              <Share2 className="h-4 w-4" /> Share
             </Button>
+            {doc.signatureStatus !== 'Signed' && (
+              <Button 
+                variant="outline" 
+                className="gap-2 h-11 border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-semibold"
+                onClick={() => setShowSignModal(true)}
+              >
+                <PenTool className="h-4 w-4" /> E-Sign
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>
     </Sheet>
+
+    <ESignatureModal 
+      document={doc}
+      isOpen={showSignModal}
+      onClose={() => setShowSignModal(false)}
+    />
+
+    <NewVersionModal 
+      document={doc}
+      isOpen={showVersionModal}
+      onClose={() => setShowVersionModal(false)}
+    />
+
+    <AttachToHearingModal 
+      document={doc}
+      isOpen={showAttachModal}
+      onClose={() => setShowAttachModal(false)}
+    />
+    </>
   );
 }

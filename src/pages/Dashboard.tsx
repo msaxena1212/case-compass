@@ -17,7 +17,9 @@ import {
   CheckCircle2,
   Plus,
   Loader2,
+  Edit3
 } from "lucide-react";
+import { UpdateHearingModal } from "@/components/UpdateHearingModal";
 import {
   BarChart,
   Bar,
@@ -31,8 +33,8 @@ import {
   Cell,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { caseService } from "@/services/caseService";
 import { clientService } from "@/services/clientService";
 import { billingService } from "@/services/billingService";
@@ -52,6 +54,10 @@ const caseColors = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [activeUpdateId, setActiveUpdateId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+
   
   // Real Data Fetching
   const { data: casesResponse, isLoading: loadingCases } = useQuery({ queryKey: ['cases'], queryFn: () => caseService.getAllCases(1, 1000) });
@@ -65,9 +71,21 @@ export default function Dashboard() {
   
   const { data: hearingsResponse, isLoading: loadingHearings } = useQuery({ queryKey: ['hearings'], queryFn: () => courtService.getAllHearings(1, 1000) });
   const rawHearings = hearingsResponse?.data || [];
-  const { data: timeEntries = [], isLoading: loadingTime } = useQuery({ 
+  const { data: timeEntriesResponse, isLoading: loadingTime } = useQuery({ 
     queryKey: ['time-entries'], 
-    queryFn: () => billingService.getTimeEntries() 
+    queryFn: () => billingService.getTimeEntries().catch(e => {
+      console.error("Dashboard: getTimeEntries error", e);
+      return { data: [], totalCount: 0 };
+    })
+  });
+  const timeEntries = timeEntriesResponse?.data || [];
+  
+  console.log("Dashboard: Query Status", {
+    loadingCases,
+    loadingClients,
+    loadingInvoices,
+    loadingHearings,
+    loadingTime
   });
   
   // Real AI Insights
@@ -77,7 +95,8 @@ export default function Dashboard() {
     enabled: cases.length > 0
   });
 
-  const isLoading = loadingCases || loadingClients || loadingInvoices || loadingHearings || loadingAi || loadingTime;
+  const isLoading = loadingCases || loadingClients || loadingInvoices || loadingHearings || loadingTime;
+  const isDataEmpty = !isLoading && cases.length === 0 && clients.length === 0 && invoices.length === 0;
 
   const today = new Date();
   const next48Hours = new Date(today.getTime() + 48 * 60 * 60 * 1000);
@@ -152,13 +171,14 @@ export default function Dashboard() {
       <AppLayout>
         <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
           <Loader2 className="h-12 w-12 text-accent animate-spin" />
-          <p className="text-sm font-bold text-muted-foreground animate-pulse">Syncing with Supabase...</p>
+          <p className="text-sm font-bold text-muted-foreground animate-pulse">Initializing LegalDesk Intelligence...</p>
         </div>
       </AppLayout>
     );
   }
 
   return (
+    <>
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
@@ -176,31 +196,6 @@ export default function Dashboard() {
              </Button>
           </div>
         </div>
-
-        {/* AI Strategic Insights */}
-        <AIInsightsWidget insights={insights} isLoading={loadingAi} />
-
-        {/* Critical Alerts (Hearings) */}
-        {criticalAlerts.length > 0 && (
-          <Card className="border-warning/30 bg-warning/5 animate-in fade-in slide-in-from-top-4 duration-500">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-6 w-6 text-warning" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-warning-foreground">Critical Deadlines: {criticalAlerts.length} approaching in 48h</p>
-                <div className="flex gap-2 flex-wrap mt-1">
-                   {criticalAlerts.map(a => (
-                     <span key={a.id} className="text-[10px] bg-warning/10 border border-warning/20 px-2 py-0.5 rounded text-warning-foreground truncate max-w-[200px]">
-                       {a.title} · {new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                     </span>
-                   ))}
-                </div>
-              </div>
-              <Button size="sm" variant="ghost" className="shrink-0 text-xs" onClick={() => navigate('/calendar')}>View Calendar</Button>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -226,6 +221,33 @@ export default function Dashboard() {
             </Card>
           ))}
         </div>
+
+        {/* AI Strategic Insights */}
+        <AIInsightsWidget insights={insights} isLoading={loadingAi} />
+
+        {/* Critical Alerts (Hearings) */}
+        {criticalAlerts.length > 0 && (
+          <Card className="border-warning/30 bg-warning/5 animate-in fade-in slide-in-from-top-4 duration-500">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-6 w-6 text-warning" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-amber-900">Critical Deadlines: {criticalAlerts.length} approaching in 48h</p>
+                <div className="flex gap-2 flex-wrap mt-1">
+                   {criticalAlerts.map(a => (
+                     <span key={a.id} className="text-[10px] bg-warning/10 border border-warning/20 px-2 py-0.5 rounded text-amber-800 font-medium truncate max-w-[200px]">
+                       {a.title} &middot; {new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                     </span>
+                   ))}
+                </div>
+              </div>
+              <Button size="sm" variant="ghost" className="shrink-0 text-xs" onClick={() => navigate('/calendar')}>View Calendar</Button>
+            </CardContent>
+          </Card>
+        )}
+
+
 
         {/* Analytics Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -376,14 +398,14 @@ export default function Dashboard() {
               <div className="divide-y divide-border/60">
                 {upcomingHearings.filter(h => new Date(h.date).toDateString() === today.toDateString()).length > 0 ? (
                   upcomingHearings.filter(h => new Date(h.date).toDateString() === today.toDateString()).map((h) => (
-                    <div key={h.id} className="px-5 py-4 flex items-start gap-4 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate('/calendar')}>
-                      <div className="text-center shrink-0 w-12 pt-1 border-r pr-4 border-border/50">
+                    <div key={h.id} className="px-5 py-4 flex items-start gap-4 hover:bg-muted/30 transition-colors group">
+                      <div className="text-center shrink-0 w-12 pt-1 border-r pr-4 border-border/50 cursor-pointer" onClick={() => navigate('/calendar')}>
                         <p className="text-lg font-display font-bold text-accent leading-none">{new Date(h.date).getDate()}</p>
                         <p className="text-[9px] text-muted-foreground uppercase font-bold">{new Date(h.date).toLocaleDateString('en-US', { month: 'short' })}</p>
                       </div>
-                      <div className="min-w-0 flex-1 pl-1">
+                      <div className="min-w-0 flex-1 pl-1 cursor-pointer" onClick={() => navigate(`/cases/${h.case_id || h.caseId}`)}>
                         <div className="flex items-center justify-between mb-0.5">
-                          <p className="text-sm font-bold truncate pr-2">{h.title}</p>
+                          <p className="text-sm font-bold truncate pr-2 group-hover:text-primary transition-colors">{h.title}</p>
                           <span className="text-[10px] bg-muted/50 border px-1.5 py-0.5 rounded text-muted-foreground font-mono shrink-0">{new Date(h.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                         <p className="text-[10px] text-muted-foreground mb-2 flex items-center gap-1">
@@ -393,6 +415,17 @@ export default function Dashboard() {
                            <span className="text-[9px] bg-accent/10 text-accent font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">{h.stage}</span>
                            {h.conflictWarning && <span className="text-[9px] bg-red-100 text-red-700 font-bold px-1.5 py-0.5 rounded flex items-center gap-1"><AlertTriangle className="h-2 w-2"/> Conflict</span>}
                         </div>
+                      </div>
+                      <div className="shrink-0 flex items-center">
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent/10 hover:text-accent"
+                          onClick={() => setActiveUpdateId(h.id)}
+                          title="Update Outcome"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   ))
@@ -411,5 +444,15 @@ export default function Dashboard() {
         </div>
       </div>
     </AppLayout>
+    <UpdateHearingModal 
+      isOpen={!!activeUpdateId}
+      onClose={() => setActiveUpdateId(null)}
+      hearingId={activeUpdateId}
+      onSuccess={() => {
+        queryClient.invalidateQueries({ queryKey: ['hearings'] });
+        queryClient.invalidateQueries({ queryKey: ['cases'] });
+      }}
+    />
+    </>
   );
 }

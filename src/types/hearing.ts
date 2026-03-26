@@ -14,4 +14,6 @@ export interface Hearing {
   nextHearingId?: string;
   conflictWarning?: boolean; 
   riskScore?: number;
+  caseTitle?: string;
+  caseStatus?: string;
 }

@@ -37,6 +37,12 @@ export interface LegalDocument {
   aiKeywords?: string[];
   riskClauses?: RiskClause[];
   
+  // Advanced Features
+  signatureStatus?: 'Not Required' | 'Pending' | 'Signed';
+  signedAt?: string;
+  signedBy?: string;
+  isEncrypted?: boolean;
+  
   // Dedup
   hash?: string;
 }

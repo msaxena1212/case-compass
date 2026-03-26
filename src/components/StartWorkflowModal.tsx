@@ -36,11 +36,12 @@ export function StartWorkflowModal({ open, onOpenChange, onComplete }: StartWork
   const [isProcessing, setIsProcessing] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: cases = [] } = useQuery({
+  const { data: casesResponse } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases,
+    queryFn: () => caseService.getAllCases(1, 1000),
     enabled: open
   });
+  const cases = casesResponse?.data || [];
 
   // Mock workflows are fine for now as templates, but let's assume they might come from a service
   const { data: workflows = [] } = useQuery({

@@ -21,6 +21,7 @@ export interface CRMClient {
   totalBilled: number;
   outstandingAmount: number;
   createdAt: string;
+  parentClientId?: string | null;
 }
 
 export interface Communication {

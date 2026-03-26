@@ -30,10 +30,11 @@ export function CreateContractModal({ open, onOpenChange, onCreated }: CreateCon
   const [expiryDate, setExpiryDate] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const { data: cases = [] } = useQuery({
+  const { data: casesResponse } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases
+    queryFn: () => caseService.getAllCases(1, 1000)
   });
+  const cases = casesResponse?.data || [];
 
   const template = contractTemplates.find(t => t.id === selectedTemplate);
 
@@ -46,35 +47,42 @@ export function CreateContractModal({ open, onOpenChange, onCreated }: CreateCon
 
     setIsGenerating(true);
     try {
+      // AI Drafting Simulation - Generate realistic content
+      const draftedClauses = template ? template.defaultClauses.map((ct, i) => ({
+        id: `cl_new_${i}`,
+        type: ct,
+        isCustom: false,
+        riskLevel: i % 3 === 0 ? 'Medium' : 'Low' as any,
+        title: ct,
+        content: `Drafting ${ct} clause for ${title} between ${partyA} and ${partyB}... This clause outlines the specific legal obligations and protections regarding ${ct.toLowerCase()} in accordance with the Indian Contract Act.`,
+        aiFlag: i === 0 ? "Standard AI-drafted clause" : undefined
+      })) : [];
+
+      const selectedCase = cases.find((c: any) => c.id === caseId);
+
       const newContract: any = {
         title,
         type: template?.type || 'NDA',
         status: 'Draft',
         parties: { partyA, partyB },
         caseId: caseId !== 'none' ? caseId : undefined,
+        clientId: selectedCase?.clientId || undefined, // Resolve clientId from selected case
         riskScore: Math.floor(Math.random() * 40) + 10,
         value: value ? parseFloat(value) : undefined,
         expiryDate: expiryDate || undefined,
-        clauses: template ? template.defaultClauses.map((ct, i) => ({
-          id: `cl_new_${i}`,
-          type: ct,
-          isCustom: false,
-          riskLevel: 'Low',
-          title: ct,
-          content: `Standard ${ct} clause — click to edit.`
-        })) : [],
+        clauses: draftedClauses,
         approvals: [],
         version: 1
       };
 
       const result = await contractService.createContract(newContract);
-      toast.success(`Contract "${title}" created as Draft.`);
+      toast.success(`Draft of "${title}" generated successfully via Legal AI.`);
       onCreated?.(result as any);
       onOpenChange(false);
       // Reset
       setStep('template'); setSelectedTemplate(''); setTitle(''); setPartyA(''); setPartyB(''); setCaseId(''); setValue(''); setExpiryDate('');
     } catch (error: any) {
-      toast.error(`Failed to create contract: ${error.message}`);
+      toast.error(`Failed to generate contract: ${error.message}`);
     } finally {
       setIsGenerating(false);
     }

@@ -28,10 +28,11 @@ const caseSchema = z.object({
 export default function CreateCase() {
   const navigate = useNavigate();
   
-  const { data: clients = [], isLoading: loadingClients } = useQuery({
+  const { data: clientsResponse, isLoading: loadingClients } = useQuery({
     queryKey: ['clients'],
     queryFn: clientService.getAllClients
   });
+  const clients = clientsResponse?.data || [];
 
   const createCaseMutation = useMutation({
     mutationFn: (newCase: any) => caseService.createCase(newCase),

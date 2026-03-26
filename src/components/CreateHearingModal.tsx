@@ -35,11 +35,12 @@ export function CreateHearingModal({ isOpen, onClose, defaultCaseId, onSuccess }
   const [clashWarning, setClashWarning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: cases = [] } = useQuery({
+  const { data: casesResponse } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases,
+    queryFn: () => caseService.getAllCases(1, 1000),
     enabled: !defaultCaseId
   });
+  const cases = casesResponse?.data || [];
 
   const { register, handleSubmit, formState: { errors }, watch, reset } = useForm<z.infer<typeof hearingSchema>>({
     resolver: zodResolver(hearingSchema),
@@ -113,8 +114,8 @@ export function CreateHearingModal({ isOpen, onClose, defaultCaseId, onSuccess }
             <Label htmlFor="caseId">Case ID / Reference *</Label>
             <select id="caseId" {...register("caseId")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={!!defaultCaseId}>
               <option value="">Select Case...</option>
-              {cases.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.title} ({c.case_number})</option>
+              {cases.filter((c: any) => c.status !== 'Closed' && c.status !== 'Won' && c.status !== 'Lost' && c.status !== 'Settled' && c.status !== 'Withdrawn').map((c: any) => (
+                <option key={c.id} value={c.id}>{c.title} ({c.case_number || c.caseNumber})</option>
               ))}
             </select>
             {errors.caseId && <p className="text-xs text-red-500">{errors.caseId.message}</p>}

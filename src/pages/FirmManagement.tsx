@@ -12,6 +12,7 @@ import {
   TrendingUp, Plus, ChevronRight, Globe, TrendingDown,
   Mail, Briefcase, GraduationCap, ArrowRightLeft, Loader2
 } from "lucide-react";
+import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
@@ -52,9 +53,9 @@ export default function FirmManagement() {
 
   // Pie chart data for revenue share
   const revenueData = offices.map((off: any) => ({
-    name: off.name,
-    value: off.monthlyRevenue,
-    color: off.id.includes('delhi') ? '#0F172A' : off.id.includes('mumbai') ? '#3B82F6' : '#8B5CF6'
+    name: off.name || 'Unknown',
+    value: off.monthlyRevenue || 0,
+    color: String(off.id).includes('delhi') ? '#0F172A' : String(off.id).includes('mumbai') ? '#3B82F6' : '#8B5CF6'
   }));
 
   const revenueMetrics = offices.map((off: any) => ({
@@ -84,7 +85,7 @@ export default function FirmManagement() {
             <h1 className="text-2xl font-display font-semibold tracking-tight">Law Firm Management</h1>
             <p className="text-sm text-muted-foreground mt-1">Multi-office operations, cross-branch teams, and revenue intelligence.</p>
           </div>
-          <Button className="gap-2 bg-accent hover:bg-accent/90 text-accent-foreground font-bold">
+          <Button onClick={() => toast.info('Feature coming soon', { description: 'Office expansion capabilities will be enabled next month.' })} className="gap-2 bg-accent hover:bg-accent/90 text-accent-foreground font-bold">
             <Plus className="h-4 w-4" /> Add New Office
           </Button>
         </div>
@@ -160,7 +161,7 @@ export default function FirmManagement() {
                         <Phone className="h-3 w-3 text-muted-foreground" />
                         <span className="font-medium">{office.phone}</span>
                       </div>
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px] font-bold hover:bg-accent/10 hover:text-accent gap-1">
+                      <Button onClick={() => toast.info('Branch Details', { description: `Loading detailed view for ${office.name}...` })} variant="ghost" size="sm" className="h-7 px-2 text-[10px] font-bold hover:bg-accent/10 hover:text-accent gap-1">
                         View Branch <ChevronRight className="h-3 w-3" />
                       </Button>
                     </div>
@@ -211,7 +212,7 @@ export default function FirmManagement() {
                   <p className="text-xs text-muted-foreground">Move associates between branches to handle temporary case load spikes.</p>
                 </div>
               </div>
-              <Button size="sm" className="bg-white border text-accent hover:bg-accent/5 font-bold">Initiate Transfer</Button>
+              <Button onClick={() => toast.info('Transfer System', { description: 'Resource orchestration engine is currently offline for maintenance.' })} size="sm" className="bg-white border text-accent hover:bg-accent/5 font-bold">Initiate Transfer</Button>
             </div>
           </TabsContent>
 

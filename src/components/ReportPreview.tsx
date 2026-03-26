@@ -53,7 +53,7 @@ export function ReportPreview({ type, data, isLoading, aiInsights }: ReportPrevi
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-accent mb-1 flex items-center gap-2">
                 AI Strategic Insight
-                <Badge variant="outline" className="text-[8px] h-4 border-accent text-accent">Gemini 1.5</Badge>
+                <Badge variant="outline" className="text-[8px] h-4 border-accent text-accent">Ollama GLM-5</Badge>
               </p>
               <p className="text-sm leading-relaxed text-foreground/80 italic">{aiInsights}</p>
             </div>

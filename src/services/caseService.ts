@@ -15,7 +15,20 @@ export const caseService = {
     if (error) throw error;
     return {
       data: (data || []).map(c => ({
-        ...c,
+        id: c.id,
+        title: c.title,
+        type: c.type,
+        status: c.status,
+        court: c.court,
+        caseNumber: c.case_number,
+        filingDate: c.filing_date,
+        lawyerId: c.lawyer_id,
+        clientId: c.client_id,
+        opponent: c.opponent,
+        tags: c.tags || [],
+        healthScore: c.health_score,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
         lawyerName: (c as any).profiles?.name || 'Unassigned'
       })) as AppCase[],
       totalCount: count || 0

@@ -30,7 +30,11 @@ export const documentService = {
         aiSummary: d.ai_summary,
         aiKeywords: d.ai_keywords || [],
         riskClauses: d.risk_clauses || [],
-        versions: d.versions || []
+        versions: d.versions || [],
+        signatureStatus: d.signature_status || 'Not Required',
+        signedAt: d.signed_at,
+        signedBy: d.signed_by,
+        isEncrypted: d.is_encrypted || false
       })) as LegalDocument[],
       totalCount: count || 0
     };
@@ -64,7 +68,11 @@ export const documentService = {
         aiSummary: d.ai_summary,
         aiKeywords: d.ai_keywords || [],
         riskClauses: d.risk_clauses || [],
-        versions: d.versions || []
+        versions: d.versions || [],
+        signatureStatus: d.signature_status || 'Not Required',
+        signedAt: d.signed_at,
+        signedBy: d.signed_by,
+        isEncrypted: d.is_encrypted || false
       })) as LegalDocument[],
       totalCount: count || 0
     };
@@ -98,7 +106,11 @@ export const documentService = {
         aiSummary: d.ai_summary,
         aiKeywords: d.ai_keywords || [],
         riskClauses: d.risk_clauses || [],
-        versions: d.versions || []
+        versions: d.versions || [],
+        signatureStatus: d.signature_status || 'Not Required',
+        signedAt: d.signed_at,
+        signedBy: d.signed_by,
+        isEncrypted: d.is_encrypted || false
       })) as LegalDocument[],
       totalCount: count || 0
     };
@@ -145,6 +157,10 @@ export const documentService = {
       ai_summary: docData.aiSummary,
       ai_keywords: docData.aiKeywords,
       risk_clauses: docData.riskClauses,
+      signature_status: docData.signatureStatus || 'Not Required',
+      signed_at: docData.signedAt,
+      signed_by: docData.signedBy,
+      is_encrypted: docData.isEncrypted || false,
       hash: docData.hash
     };
 
@@ -179,5 +195,14 @@ export const documentService = {
 
     if (error) throw error;
     return data as LegalDocument;
+  },
+
+  async deleteDocument(id: string) {
+    const { error } = await supabase
+      .from('documents')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
   }
 };

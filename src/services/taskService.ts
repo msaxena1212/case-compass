@@ -87,6 +87,18 @@ export const taskService = {
     return data as AppTask;
   },
 
+  async updateTask(id: string, updates: Partial<{ title: string; description: string; priority: string; due_date: string; status: string }>) {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as AppTask;
+  },
+
   async deleteTask(id: string) {
     const { error } = await supabase
       .from('tasks')

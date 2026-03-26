@@ -12,10 +12,15 @@ import {
   ArrowLeft, Phone, Mail, MapPin, Building, Activity,
   Calendar, FileText, PhoneCall, CheckCircle2,
   Clock, Link2, ExternalLink, MessageSquarePlus, PieChart, Briefcase,
-  Loader2
+  Loader2, Trash2, Eye, Upload, UserPlus, Users
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
+import { billingService } from "@/services/billingService";
+import { UploadDocumentModal } from "@/components/UploadDocumentModal";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { AddSubClientModal } from "@/components/AddSubClientModal";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 export default function ClientDetail() {
@@ -51,6 +56,41 @@ export default function ClientDetail() {
   const totalDocPages = Math.ceil(totalDocs / pageSize);
 
   const [logModalOpen, setLogModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [addSubClientOpen, setAddSubClientOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: invoicesResponse, isLoading: loadingInvoices } = useQuery({
+    queryKey: ['client-invoices', id],
+    queryFn: () => billingService.getAllInvoices(1, 100), // Adjust if needed
+    enabled: !!id
+  });
+  const clientInvoices = (invoicesResponse?.data || []).filter(i => i.clientId === id);
+  
+  const billingTotals = useMemo(() => {
+    const total = clientInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    const outstanding = clientInvoices
+      .filter(inv => inv.status !== 'Paid')
+      .reduce((sum, inv) => sum + inv.total, 0);
+    return { total, outstanding };
+  }, [clientInvoices]);
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (docId: string) => documentService.deleteDocument(docId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', id] });
+      toast.success("Document deleted");
+    },
+    onError: (err: any) => toast.error(`Delete failed: ${err.message}`)
+  });
+
+  // Sub-clients query
+  const { data: subClients = [], isLoading: loadingSubClients } = useQuery({
+    queryKey: ['sub-clients', id],
+    queryFn: () => clientService.getSubClients(id || ''),
+    enabled: !!id
+  });
+
   const isLoading = loadingClient || loadingComm || loadingDocs;
 
   if (isLoading) {
@@ -107,9 +147,6 @@ export default function ClientDetail() {
             </h1>
           </div>
           <div className="ml-auto flex gap-2">
-            <Button variant="outline" className="gap-2 shrink-0">
-              <ExternalLink className="h-4 w-4" /> Client Portal
-            </Button>
             <Button onClick={() => setLogModalOpen(true)} className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90 shrink-0 shadow-sm">
               <MessageSquarePlus className="h-4 w-4" /> Log Interaction
             </Button>
@@ -190,8 +227,9 @@ export default function ClientDetail() {
           <div className="lg:col-span-9">
             <Tabs defaultValue="overview" className="w-full">
               <div className="bg-background sticky top-0 z-10 pb-4">
-                <TabsList className="grid grid-cols-4 w-[500px]">
+              <TabsList className="grid grid-cols-5 w-[620px]">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
+                  <TabsTrigger value="sub-clients">Sub-Clients ({subClients.length})</TabsTrigger>
                   <TabsTrigger value="timeline">Timeline</TabsTrigger>
                   <TabsTrigger value="documents">Documents</TabsTrigger>
                   <TabsTrigger value="billing">Billing Info</TabsTrigger>
@@ -279,7 +317,7 @@ export default function ClientDetail() {
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y text-sm">
-                      {clientComms.slice(0, 3).map(comm => (
+                      {clientComms.length > 0 ? clientComms.slice(0, 3).map(comm => (
                         <div key={comm.id} className="p-4 flex gap-4">
                           <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
                             {commIcons[comm.type] || <MessageSquarePlus className="h-4 w-4" />}
@@ -292,8 +330,77 @@ export default function ClientDetail() {
                             </p>
                           </div>
                         </div>
-                      ))}
+                      )) : (
+                        /* Sample Data when empty */
+                        [
+                          { id: 's1', type: 'Call', summary: 'Initial consultation regarding property dispute', date: new Date(Date.now() - 86400000 * 2).toISOString(), loggedBy: 'Adv. Kumar' },
+                          { id: 's2', type: 'Email', summary: 'Sent case engagement letter and fee structure', date: new Date(Date.now() - 86400000 * 1).toISOString(), loggedBy: 'Adv. Kumar' }
+                        ].map(s => (
+                          <div key={s.id} className="p-4 flex gap-4 opacity-70 italic">
+                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                              {commIcons[s.type as keyof typeof commIcons] || <MessageSquarePlus className="h-4 w-4" />}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{s.summary} <Badge variant="outline" className="text-[8px] h-3 ml-1 px-1 font-normal opacity-50">SAMPLE</Badge></p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {formatDate(s.date, { month: 'short', day: 'numeric' } as any)} · by {s.loggedBy}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* SUB-CLIENTS TAB */}
+              <TabsContent value="sub-clients" className="space-y-4 mt-0">
+                <Card className="border-border/60 shadow-sm">
+                  <CardHeader className="py-4 border-b bg-muted/20 flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                      <Users className="h-4 w-4 text-primary" /> Sub-Clients
+                    </CardTitle>
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setAddSubClientOpen(true)}>
+                      <UserPlus className="h-3 w-3" /> Add Sub-Client
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {loadingSubClients ? (
+                      <div className="p-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                    ) : subClients.length > 0 ? (
+                      <div className="divide-y">
+                        {subClients.map((sc: any) => (
+                          <div key={sc.id} className="p-4 hover:bg-muted/30 transition-colors flex items-center justify-between group cursor-pointer" onClick={() => navigate(`/clients/${sc.id}`)}>
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                                {sc.avatar}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold group-hover:text-primary transition-colors">{sc.name}</p>
+                                <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                                  {sc.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {sc.email}</span>}
+                                  {sc.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {sc.phone}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] bg-background">{sc.type}</Badge>
+                              <Badge variant="outline" className={`text-[10px] ${sc.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-muted'}`}>{sc.status}</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-10 text-center">
+                        <Users className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
+                        <p className="text-sm font-medium text-muted-foreground">No sub-clients yet</p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">Add sub-clients like family members, co-directors, or representatives.</p>
+                        <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={() => setAddSubClientOpen(true)}>
+                          <UserPlus className="h-3 w-3" /> Add First Sub-Client
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -337,9 +444,33 @@ export default function ClientDetail() {
                           </div>
                         </div>
                       )) : (
-                        <div className="text-center py-10 text-muted-foreground text-sm z-10 relative bg-card">
-                          No communication logged yet.
-                        </div>
+                        /* Sample Timeline Data when empty */
+                        [
+                          { id: 's1', type: 'Call', summary: 'Initial Reach-out', notes: 'Client inquired about legal services for a property dispute in Mumbai.', date: new Date(Date.now() - 86400000 * 5).toISOString(), loggedBy: 'System' },
+                          { id: 's2', type: 'Meeting', summary: 'Strategy Session', notes: 'Discussed potential litigation routes and fee arrangements.', date: new Date(Date.now() - 86400000 * 3).toISOString(), loggedBy: 'Adv. Kumar' }
+                        ].map((s, i) => (
+                          <div key={s.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active opacity-60">
+                            <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-background bg-muted text-muted-foreground shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 shadow-sm">
+                              {commIcons[s.type as keyof typeof commIcons]}
+                            </div>
+                            <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-card border shadow-sm rounded-xl p-4">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{s.type}</span>
+                                <span className="text-[10px] font-mono text-muted-foreground">
+                                  {formatDate(s.date, { month: 'short', day: 'numeric' })}
+                                </span>
+                              </div>
+                              <h4 className="text-sm font-semibold">{s.summary}</h4>
+                              <p className="text-xs text-muted-foreground mt-2 bg-muted/20 p-2 rounded-md italic">
+                                {s.notes}
+                              </p>
+                              <div className="flex items-center justify-between mt-3 pt-3 border-t text-[10px]">
+                                <span className="text-muted-foreground">Logged by <span className="font-medium text-foreground">{s.loggedBy}</span></span>
+                                <Badge variant="outline" className="text-[8px] h-3 px-1 font-normal">SAMPLE</Badge>
+                              </div>
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
 
@@ -383,14 +514,14 @@ export default function ClientDetail() {
                 <Card className="border-border/60 shadow-sm">
                   <CardHeader className="py-4 border-b flex flex-row items-center justify-between">
                     <CardTitle className="text-sm font-bold">Client Documents</CardTitle>
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => navigate('/documents')}>
-                      <ExternalLink className="h-3 w-3" /> Document Center
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setIsUploadModalOpen(true)}>
+                      <Upload className="h-3 w-3" /> Add Document
                     </Button>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y">
                       {clientDocs.map(doc => (
-                        <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-muted/30">
+                        <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-muted/30 group">
                           <div className="flex items-center gap-3">
                             <FileText className="h-5 w-5 text-muted-foreground" />
                             <div>
@@ -398,7 +529,19 @@ export default function ClientDetail() {
                               <p className="text-xs text-muted-foreground">{doc.documentType} · Added {formatDate(doc.uploadedAt)}</p>
                             </div>
                           </div>
-                          <Badge variant="secondary" className="font-mono text-[10px]">{doc.caseId}</Badge>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => window.open((doc as any).file_url || (doc as any).fileUrl, '_blank')}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={() => {
+                              if(confirm('Are you sure you want to delete this document?')) {
+                                deleteDocMutation.mutate(doc.id);
+                              }
+                            }}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Badge variant="secondary" className="font-mono text-[10px] hidden sm:inline-flex">{doc.caseId.split('-')[0]}</Badge>
+                          </div>
                         </div>
                       ))}
                       {clientDocs.length === 0 && (
@@ -450,19 +593,19 @@ export default function ClientDetail() {
                         <PieChart className="h-3.5 w-3.5" /> Total Billed
                       </p>
                       <p className="text-3xl font-display font-bold mt-2">
-                        {formatCurrency(client.totalBilled)}
+                        {formatCurrency(billingTotals.total)}
                       </p>
                     </CardContent>
                   </Card>
-                  <Card className={`border-border/60 shadow-sm bg-gradient-to-br ${client.outstandingAmount > 0 ? 'from-amber-50 to-orange-50/20 border-amber-200' : 'from-green-50 to-emerald-50/20 border-green-200'}`}>
+                  <Card className={`border-border/60 shadow-sm bg-gradient-to-br ${billingTotals.outstanding > 0 ? 'from-amber-50 to-orange-50/20 border-amber-200' : 'from-green-50 to-emerald-50/20 border-green-200'}`}>
                     <CardContent className="p-6">
-                      <p className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${client.outstandingAmount > 0 ? 'text-amber-800' : 'text-green-800'}`}>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${billingTotals.outstanding > 0 ? 'text-amber-800' : 'text-green-800'}`}>
                         <Activity className="h-3.5 w-3.5" /> Outstanding Amount
                       </p>
-                      <p className={`text-3xl font-display font-bold mt-2 ${client.outstandingAmount > 0 ? 'text-amber-700' : 'text-green-700'}`}>
-                        {formatCurrency(client.outstandingAmount)}
+                      <p className={`text-3xl font-display font-bold mt-2 ${billingTotals.outstanding > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+                        {formatCurrency(billingTotals.outstanding)}
                       </p>
-                      {client.outstandingAmount === 0 && (
+                      {billingTotals.outstanding === 0 && (
                         <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Fully paid</p>
                       )}
                     </CardContent>
@@ -483,6 +626,18 @@ export default function ClientDetail() {
           onClose={() => setLogModalOpen(false)}
           clientId={client.id}
           defaultCaseId={(client as any).cases[0]?.id}
+        />
+        <UploadDocumentModal 
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          clientId={client.id}
+          caseId={linkedCases[0]?.id}
+        />
+        <AddSubClientModal 
+          parentClientId={client.id}
+          parentClientName={client.name}
+          isOpen={addSubClientOpen}
+          onClose={() => setAddSubClientOpen(false)}
         />
       </div>
     </AppLayout>

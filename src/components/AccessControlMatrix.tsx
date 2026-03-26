@@ -96,7 +96,7 @@ export function AccessControlMatrix() {
         <div>
           <p className="text-xs font-bold text-accent">Strategic Tip</p>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Case Compass uses **Zero Trust Architecture**. Default access is always denied until explicitly granted via these roles. This ensures multi-office compliance and data privacy for high-profile clients.
+            LegalDesk uses **Zero Trust Architecture**. Default access is always denied until explicitly granted via these roles. This ensures multi-office compliance and data privacy for high-profile clients.
           </p>
         </div>
       </div>
