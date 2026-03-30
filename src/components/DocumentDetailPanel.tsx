@@ -56,11 +56,12 @@ export function DocumentDetailPanel({ document: doc, isOpen, onClose }: Document
     if (!doc || isAnalyzing) return;
     setIsAnalyzing(true);
     try {
-      // 1. Summarize
-      const summary = await summarizeDocument(doc.extractedText || doc.fileName);
+      // 1. Summarize - ensure we have at least some context
+      const contextText = doc.extractedText || `Filename: ${doc.fileName}\nDocument Type: ${doc.documentType}\nCase: ${doc.caseName}`;
+      const summary = await summarizeDocument(contextText);
       
       // 2. Risk Analysis
-      const riskJson = await analyzeLegalRisk(doc.extractedText || doc.fileName);
+      const riskJson = await analyzeLegalRisk(contextText);
       let riskClauses: RiskClause[] = [];
       try {
         // Simple attempt to find JSON in AI response

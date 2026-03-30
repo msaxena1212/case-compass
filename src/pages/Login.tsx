@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Shield, Lock, Mail, ChevronRight, Scale, Loader2 } from "lucide-react";
+import { Shield, Lock, Mail, ChevronRight, Scale, Loader2, Database } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -35,7 +35,20 @@ export default function Login() {
 
       if (error) {
         if (error.status === 400 || error.message.includes("Email not confirmed")) {
-          toast.error("Login failed. Please ensure your email is confirmed in Supabase or disable 'Confirm Email' in Auth Settings.");
+          toast.error(
+            <div className="flex flex-col gap-2">
+              <p>Login failed. Email confirmation required.</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 text-[10px] font-bold"
+                onClick={() => navigate("/setup")}
+              >
+                Go to Setup Instructions
+              </Button>
+            </div>,
+            { duration: 6000 }
+          );
         } else {
           throw error;
         }
@@ -141,6 +154,21 @@ export default function Login() {
                   <Lock className="h-3.5 w-3.5 text-orange-500" /> OTP
                 </Button>
               </div>
+
+              {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  className="w-full h-9 text-[10px] font-bold text-muted-foreground border border-dashed border-muted-foreground/30 hover:bg-slate-100"
+                  onClick={() => {
+                    localStorage.setItem('legaldesk_bypass_auth', 'true');
+                    window.location.reload();
+                  }}
+                >
+                  <Database className="h-3 w-3 mr-2 text-indigo-500" />
+                  Bypass Auth (Development Only)
+                </Button>
+              )}
             </CardFooter>
           </form>
         </Card>

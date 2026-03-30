@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Shield, Database, CheckCircle, AlertCircle } from "lucide-react";
+import { Shield, Database, CheckCircle, AlertCircle, Brain, Sparkles } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 
 export default function SupabaseSetup() {
@@ -137,17 +137,122 @@ export default function SupabaseSetup() {
             <div className="flex flex-col gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                <p className="text-xs font-bold uppercase tracking-tight">Required Configuration</p>
+                <p className="text-xs font-bold uppercase tracking-tight">Required: Auth Configuration</p>
               </div>
               <p className="text-[11px] leading-relaxed font-medium">
                 Supabase requires email confirmation by default. To login with a password immediately, you <strong>MUST</strong>:
               </p>
               <ol className="text-[11px] list-decimal list-inside space-y-1 font-medium ml-1">
                 <li>Go to <a href="https://supabase.com/dashboard/project/jepigwsdhxsmvwpaqryg/auth/settings" target="_blank" rel="noreferrer" className="underline font-bold">Auth Settings</a></li>
-                <li>Scroll to <strong>"Confirm Email"</strong></li>
-                <li>Toggle it <strong>OFF</strong></li>
+                <li>Scroll to <strong>"Confirm Email"</strong> and toggle it <strong>OFF</strong></li>
                 <li>Save Changes</li>
               </ol>
+            </div>
+
+            <div className="flex flex-col gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-800">
+              <div className="flex items-start gap-3">
+                <Database className="h-5 w-5 shrink-0 mt-0.5" />
+                <p className="text-xs font-bold uppercase tracking-tight">Required: Storage Initialization</p>
+              </div>
+              <p className="text-[11px] leading-relaxed font-medium">
+                The document cloud requires a storage bucket named <strong>'documents'</strong>. Run this SQL in your <a href="https://supabase.com/dashboard/project/jepigwsdhxsmvwpaqryg/sql/new" target="_blank" rel="noreferrer" className="underline font-bold">SQL Editor</a>:
+              </p>
+              <pre className="text-[9px] bg-slate-900 text-slate-100 p-2 rounded overflow-x-auto font-mono">
+{`-- 1. Create the bucket
+insert into storage.buckets (id, name, public)
+values ('documents', 'documents', true)
+on conflict (id) do nothing;
+
+-- 2. Add missing columns to documents table
+alter table public.documents 
+add column if not exists is_encrypted boolean default false,
+add column if not exists signature_status text default 'Not Required',
+add column if not exists signed_at timestamptz,
+add column if not exists signed_by text,
+add column if not exists versions jsonb default '[]';
+
+-- 3. Enable public access
+create policy "Public Access"
+  on storage.objects for select
+  using ( bucket_id = 'documents' );
+
+-- 4. Enable uploads for authenticated users
+create policy "Authenticated Uploads"
+  on storage.objects for insert
+  with check ( 
+    bucket_id = 'documents' AND 
+    auth.role() = 'authenticated' 
+  );`}
+              </pre>
+
+              {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[10px] font-bold border-dashed hover:bg-white"
+                  onClick={() => {
+                    const active = localStorage.getItem('legaldesk_bypass_storage') === 'true';
+                    localStorage.setItem('legaldesk_bypass_storage', (!active).toString());
+                    toast.success(`Storage bypass ${!active ? 'enabled' : 'disabled'}`);
+                    window.location.reload();
+                  }}
+                >
+                  <Database className="h-3 w-3 mr-2 text-blue-500" />
+                  {localStorage.getItem('legaldesk_bypass_storage') === 'true' 
+                    ? "Disable Storage Bypass" 
+                    : "Enable Storage Bypass (Dev Mode)"}
+                </Button>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 p-4 bg-purple-50 border border-purple-200 rounded-lg text-purple-800">
+              <div className="flex items-start gap-3">
+                <Brain className="h-5 w-5 shrink-0 mt-0.5" />
+                <p className="text-xs font-bold uppercase tracking-tight">AI: Ollama Configuration</p>
+              </div>
+              <p className="text-[11px] leading-relaxed font-medium">
+                AI analysis requires a local <strong>Ollama</strong> instance. 
+              </p>
+              <ol className="text-[11px] list-decimal list-inside space-y-1 font-medium ml-1">
+                <li>Install Ollama from <a href="https://ollama.com" target="_blank" rel="noreferrer" className="underline font-bold">ollama.com</a></li>
+                <li>Run: <code className="bg-purple-100 px-1 rounded">ollama run glm-5:cloud</code></li>
+              </ol>
+              
+              <div className="flex flex-col gap-2 mt-1">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[10px] font-bold h-8"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch('http://localhost:11434/api/tags');
+                      if (res.ok) toast.success("Ollama is running!");
+                      else toast.error("Ollama returned an error status");
+                    } catch (e) {
+                      toast.error("Ollama is not reachable. Is it running?");
+                    }
+                  }}
+                >
+                  Test Ollama Connection
+                </Button>
+
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[10px] font-bold border-dashed border-purple-400 h-8"
+                  onClick={() => {
+                    const active = localStorage.getItem('legaldesk_bypass_ai') === 'true';
+                    localStorage.setItem('legaldesk_bypass_ai', (!active).toString());
+                    toast.success(`AI bypass ${!active ? 'enabled' : 'disabled'}`);
+                    window.location.reload();
+                  }}
+                >
+                  <Sparkles className="h-3 w-3 mr-2 text-purple-500" />
+                  {localStorage.getItem('legaldesk_bypass_ai') === 'true' 
+                    ? "Disable AI Bypass" 
+                    : "Enable AI Bypass (Dev Mode)"}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

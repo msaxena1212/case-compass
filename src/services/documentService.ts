@@ -128,19 +128,44 @@ export const documentService = {
   },
 
   async uploadDocument(docData: Omit<LegalDocument, 'id' | 'uploadedAt'>, file: File) {
-    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'pdf';
-    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
-    const filePath = `${docData.caseId}/${fileName}`;
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const bypassActive = typeof window !== 'undefined' && localStorage.getItem('legaldesk_bypass_storage') === 'true';
 
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file);
+    let publicUrl = '';
 
-    if (uploadError) throw uploadError;
+    if (isLocalhost && bypassActive) {
+      console.log("documentService: Using storage bypass for local development");
+      // Simulate a small delay for realistic feel
+      await new Promise(resolve => setTimeout(resolve, 800));
+      publicUrl = `https://mock-storage.legaldesk.dev/${docData.caseId}/${file.name}`;
+      
+      // Provide some mock extracted text so AI analysis has something to work with
+      const mockTexts: Record<string, string> = {
+        'Petition': 'PETITION UNDER ARTICLE 226 OF THE CONSTITUTION OF INDIA. The petitioner seeks urgent relief against the respondent for breach of contract and infringement of rights. Jurisdiction: Delhi High Court.',
+        'Contract': 'SERVICE AGREEMENT. This agreement is made between Party A and Party B. Liability is capped at $50,000. Governing law: State of New York.',
+        'Evidence': 'EXHIBIT A: PHOTOGRAPH OF SITE INSPECTION. Date: 2026-03-20. Location: Plot 47. Findings: Encroachment confirmed.',
+        'Order': 'INTERIM ORDER. The court hereby grants a stay on all further proceedings until the next hearing date set for April 15, 2026.'
+      };
+      
+      // @ts-ignore - adding field for AI context
+      docData.extractedText = mockTexts[docData.documentType as string] || `Document: ${docData.fileName}. Type: ${docData.documentType}.`;
+    } else {
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'pdf';
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
+      const filePath = `${docData.caseId}/${fileName}`;
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl: supabaseUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(filePath);
+      
+      publicUrl = supabaseUrl;
+    }
 
     const dbData = {
       case_id: docData.caseId,
@@ -161,7 +186,8 @@ export const documentService = {
       signed_at: docData.signedAt,
       signed_by: docData.signedBy,
       is_encrypted: docData.isEncrypted || false,
-      hash: docData.hash
+      hash: docData.hash,
+      extracted_text: (docData as any).extractedText
     };
 
     const { data, error: dbError } = await supabase

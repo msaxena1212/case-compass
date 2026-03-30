@@ -6,6 +6,24 @@ const OLLAMA_URL = "http://localhost:11434/api/generate";
 const DEFAULT_MODEL = "glm-5:cloud";
 
 export async function generateLegalContent(prompt: string, modelName: string = DEFAULT_MODEL) {
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const bypassActive = typeof window !== 'undefined' && localStorage.getItem('legaldesk_bypass_ai') === 'true';
+
+  if (isLocalhost && bypassActive) {
+    console.log("gemini.ts: Using AI bypass for local development");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Check if the prompt is for risk analysis (JSON)
+    if (prompt.toLowerCase().includes('json')) {
+      return JSON.stringify([
+        { text: "Standard mock liability risk detected.", severity: "medium", suggestion: "Review standard indemnity terms." },
+        { text: "Missing governing law jurisdiction.", severity: "low", suggestion: "Specify a local court." }
+      ]);
+    }
+    
+    return "This is a mock AI summary generated for development purposes. The document appears to be a standard legal filing according to the provided text.";
+  }
+
   try {
     const response = await fetch(OLLAMA_URL, {
       method: "POST",

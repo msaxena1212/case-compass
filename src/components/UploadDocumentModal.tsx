@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { caseService } from "@/services/caseService";
 import { toast } from "sonner";
 import { Upload, FileText, Loader2, Lock } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type UploadDocumentModalProps = {
   isOpen: boolean;
@@ -18,6 +19,7 @@ type UploadDocumentModalProps = {
 };
 
 export function UploadDocumentModal({ isOpen, onClose, clientId, caseId: initialCaseId, onSuccess }: UploadDocumentModalProps) {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState('Evidence');
   const [caseId, setCaseId] = useState(initialCaseId || '');
@@ -76,7 +78,7 @@ export function UploadDocumentModal({ isOpen, onClose, clientId, caseId: initial
       size: `${(file.size / 1024).toFixed(1)} KB`,
       versionNumber: 1,
       status: 'active',
-      uploadedBy: 'Adv. Kumar',
+      uploadedBy: user?.id || '00000000-0000-0000-0000-000000000000',
       tags: [],
       versions: [],
       isEncrypted: enablePassword && docPassword.length > 0

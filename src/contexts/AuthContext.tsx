@@ -16,6 +16,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Development bypass check
+  useEffect(() => {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const bypassActive = localStorage.getItem('legaldesk_bypass_auth') === 'true';
+
+    if (isLocalhost && bypassActive) {
+      console.log("AuthContext: Development bypass active");
+      const mockUser: User = {
+        id: '00000000-0000-0000-0000-000000000000',
+        email: 'admin@casecompass.com',
+        app_metadata: {},
+        user_metadata: { name: 'Dev Admin', role: 'Admin' },
+        aud: 'authenticated',
+        created_at: new Date().toISOString()
+      };
+      
+      const mockSession: Session = {
+        access_token: 'mock-token',
+        refresh_token: 'mock-refresh',
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: mockUser
+      };
+
+      setSession(mockSession);
+      setUser(mockUser);
+      setIsLoading(false);
+      return;
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -48,8 +79,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signOut = async () => {
+    localStorage.removeItem('legaldesk_bypass_auth');
     const { error } = await supabase.auth.signOut();
     if (error) console.error('Error signing out:', error.message);
+    setSession(null);
+    setUser(null);
   };
 
   return (
