@@ -1,25 +1,79 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, Shield, Lock, Eye, Edit3, Trash2, Download } from "lucide-react";
 import { UserRole } from "@/types/security";
-import { useQuery } from "@tanstack/react-query";
 import { securityService } from "@/services/securityService";
 import { Loader2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { useState } from "react";
 
 const ROLES: UserRole[] = ['Partner', 'Lawyer', 'Junior Associate', 'Admin', 'Client'];
 const MODULES = ['Cases', 'Documents', 'Billing', 'AI Assistant', 'System', 'Contracts'];
 
 export function AccessControlMatrix() {
-  const { data: permissions = [], isLoading } = useQuery({
+  const queryClient = useQueryClient();
+  const [updating, setUpdating] = useState<string | null>(null);
+
+  const { data: permissions = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['role-permissions'],
-    queryFn: securityService.getRolePermissions
+    queryFn: securityService.getRolePermissions,
+    retry: 1
   });
+
+  const mutation = useMutation({
+    mutationFn: ({ role, module, actions }: { role: string, module: string, actions: string[] }) => 
+      securityService.updateRolePermission(role, module, actions),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['role-permissions'] });
+      toast.success("Permission updated");
+      setUpdating(null);
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to update: ${error.message}`);
+      setUpdating(null);
+    }
+  });
+
+  const togglePermission = (role: string, module: string, action: string) => {
+    const dbModule = module === 'AI Assistant' ? 'AI' : module;
+    const rule = permissions.find((r: any) => r.role === role && r.module === dbModule);
+    let currentActions = rule?.actions || [];
+    
+    let newActions;
+    if (currentActions.includes(action)) {
+      newActions = currentActions.filter((a: string) => a !== action);
+    } else {
+      newActions = [...currentActions, action];
+    }
+
+    setUpdating(`${role}-${module}-${action}`);
+    mutation.mutate({ role, module: dbModule, actions: newActions });
+  };
 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 gap-3">
         <Loader2 className="h-10 w-10 text-accent animate-spin" />
         <p className="text-sm font-bold text-muted-foreground animate-pulse">Loading Permissions...</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center p-20 gap-4 text-center">
+        <div className="h-12 w-12 rounded-full bg-red-50 flex items-center justify-center text-red-600">
+          <Shield className="h-6 w-6" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-red-600">Failed to load permissions</p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-[250px]">The system encountered an error while fetching the RBAC matrix. This might be due to a missing table or network issue.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
+          Retry Connection
+        </Button>
       </div>
     );
   }
@@ -69,18 +123,34 @@ export function AccessControlMatrix() {
                   return (
                     <TableCell key={`${role}-${module}`} className="text-center border-l py-4 px-2">
                       <div className="flex items-center justify-center gap-1.5">
-                        <span className={`h-4 w-4 rounded flex items-center justify-center border ${canView ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-muted/40 border-border/40 text-muted-foreground/30'}`}>
-                          {canView ? <Check className="h-2.5 w-2.5" /> : <X className="h-2.5 w-2.5" />}
-                        </span>
-                        <span className={`h-4 w-4 rounded flex items-center justify-center border ${canEdit ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-muted/40 border-border/40 text-muted-foreground/30'}`}>
-                          {canEdit ? <Check className="h-2.5 w-2.5" /> : <X className="h-2.5 w-2.5" />}
-                        </span>
-                        <span className={`h-4 w-4 rounded flex items-center justify-center border ${canDelete ? 'bg-red-50 border-red-200 text-red-600' : 'bg-muted/40 border-border/40 text-muted-foreground/30'}`}>
-                          {canDelete ? <Check className="h-2.5 w-2.5" /> : <X className="h-2.5 w-2.5" />}
-                        </span>
-                        <span className={`h-4 w-4 rounded flex items-center justify-center border ${canExport ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-muted/40 border-border/40 text-muted-foreground/30'}`}>
-                          {canExport ? <Check className="h-2.5 w-2.5" /> : <X className="h-2.5 w-2.5" />}
-                        </span>
+                        <PermissionToggle 
+                          active={canView} 
+                          loading={updating === `${role}-${module}-View`}
+                          onClick={() => togglePermission(role, module, 'View')}
+                          color="emerald"
+                          icon={<Eye className="h-2.5 w-2.5" />}
+                        />
+                        <PermissionToggle 
+                          active={canEdit} 
+                          loading={updating === `${role}-${module}-Edit`}
+                          onClick={() => togglePermission(role, module, 'Edit')}
+                          color="emerald"
+                          icon={<Edit3 className="h-2.5 w-2.5" />}
+                        />
+                        <PermissionToggle 
+                          active={canDelete} 
+                          loading={updating === `${role}-${module}-Delete`}
+                          onClick={() => togglePermission(role, module, 'Delete')}
+                          color="red"
+                          icon={<Trash2 className="h-2.5 w-2.5" />}
+                        />
+                        <PermissionToggle 
+                          active={canExport} 
+                          loading={updating === `${role}-${module}-Export`}
+                          onClick={() => togglePermission(role, module, 'Export')}
+                          color="blue"
+                          icon={<Download className="h-2.5 w-2.5" />}
+                        />
                       </div>
                     </TableCell>
                   );
@@ -101,5 +171,34 @@ export function AccessControlMatrix() {
         </div>
       </div>
     </div>
+  );
+}
+
+function PermissionToggle({ active, loading, onClick, color, icon }: any) {
+  if (loading) {
+    return (
+      <div className="h-4 w-4 flex items-center justify-center">
+        <Loader2 className="h-2.5 w-2.5 text-muted-foreground animate-spin" />
+      </div>
+    );
+  }
+
+  const activeClasses = color === 'red' 
+    ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' 
+    : color === 'blue'
+    ? 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'
+    : 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100';
+
+  return (
+    <button 
+      onClick={onClick}
+      className={`h-4 w-4 rounded flex items-center justify-center border transition-colors ${
+        active 
+          ? activeClasses 
+          : 'bg-muted/40 border-border/40 text-muted-foreground/30 hover:bg-muted/60'
+      }`}
+    >
+      {active ? icon : <X className="h-2.5 w-2.5" />}
+    </button>
   );
 }

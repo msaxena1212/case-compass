@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Briefcase, Activity, Loader2 } from "lucide-react";
+import { Search, Plus, Briefcase, Activity, Loader2, ArrowRightLeft } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { clientService } from "@/services/clientService";
 import { calculateHealthScore } from "@/utils/caseUtils";
 import { formatDate } from "@/utils/formatters";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { TransferCaseModal } from "@/components/TransferCaseModal";
 
 const typeFilters = ["All", "Civil", "Criminal", "Corporate", "Family"];
 
@@ -19,6 +20,7 @@ export default function Cases() {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const [page, setPage] = useState(1);
+  const [transferCase, setTransferCase] = useState<any | null>(null);
   const pageSize = 10;
   const navigate = useNavigate();
 
@@ -67,6 +69,16 @@ export default function Cases() {
 
   return (
     <AppLayout>
+      {transferCase && (
+        <TransferCaseModal
+          isOpen={!!transferCase}
+          onClose={() => setTransferCase(null)}
+          caseId={transferCase.id}
+          caseTitle={transferCase.title}
+          currentOfficeId={transferCase.officeId}
+          currentLawyerId={transferCase.lawyerId}
+        />
+      )}
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -116,10 +128,10 @@ export default function Cases() {
               <div className="col-span-3">Case Title</div>
               <div className="col-span-1">Type</div>
               <div className="col-span-2">Client</div>
-              <div className="col-span-2">Court</div>
-              <div className="col-span-1">Filed Date</div>
+              <div className="col-span-2">Office</div>
               <div className="col-span-1">Health</div>
               <div className="col-span-1">Status</div>
+              <div className="col-span-1">Actions</div>
             </div>
 
             <div className="divide-y">
@@ -138,14 +150,27 @@ export default function Cases() {
                     <span className="text-xs text-muted-foreground">{c.type}</span>
                   </div>
                   <div className="col-span-2 text-sm truncate">{c.clientName}</div>
-                  <div className="col-span-2 text-xs text-muted-foreground truncate">{c.court}</div>
-                  <div className="col-span-1 text-xs truncate">{formatDate(c.filingDate)}</div>
+                  <div className="col-span-2 text-xs text-muted-foreground truncate">{c.officeName}</div>
                   <div className="col-span-1 flex items-center gap-1 text-xs">
                     <Activity className={`h-3 w-3 ${c.healthScore > 80 ? 'text-green-500' : c.healthScore > 50 ? 'text-yellow-500' : 'text-red-500'}`} />
                     <span>{c.healthScore}%</span>
                   </div>
                   <div className="col-span-1 flex items-center">
                     <StatusBadge status={c.status} />
+                  </div>
+                  <div className="col-span-1 flex items-center justify-end">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTransferCase(c);
+                      }}
+                      className="h-8 w-8 p-0 hover:bg-accent/10"
+                      title="Transfer Case"
+                    >
+                      <ArrowRightLeft className="h-4 w-4 text-accent" />
+                    </Button>
                   </div>
                 </div>
               ))}

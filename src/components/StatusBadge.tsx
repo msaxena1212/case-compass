@@ -18,7 +18,8 @@ const statusStyles: Record<string, string> = {
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const style = statusStyles[status.toLowerCase()] || "bg-muted text-muted-foreground";
+  const normalizedStatus = (status || "").toLowerCase();
+  const style = statusStyles[normalizedStatus] || "bg-muted text-muted-foreground";
   return (
     <span
       className={cn(

@@ -21,6 +21,7 @@ export interface Case {
   clientName?: string; // Joined field
   opponent: OpponentDetails;
   tags: string[];
+  officeId: string;
   createdAt: string;
   updatedAt: string;
   healthScore: number; 
@@ -28,6 +29,7 @@ export interface Case {
 
 export interface AppCase extends Case {
   lawyerName: string;
+  officeName: string;
 }
 
 export interface TimelineEntry {

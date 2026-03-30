@@ -79,5 +79,21 @@ export const securityService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async updateRolePermission(role: string, module: string, actions: string[]) {
+    const { data, error } = await supabase
+      .from('role_permissions')
+      .upsert({ 
+        role, 
+        module, 
+        actions,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'role,module' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };

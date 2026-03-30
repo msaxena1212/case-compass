@@ -8,7 +8,7 @@ export const caseService = {
 
     const { data, error, count } = await supabase
       .from('cases')
-      .select('*, profiles(name)', { count: 'exact' })
+      .select('*, profiles(name), offices(name)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(from, to);
 
@@ -24,12 +24,14 @@ export const caseService = {
         filingDate: c.filing_date,
         lawyerId: c.lawyer_id,
         clientId: c.client_id,
+        officeId: c.office_id,
         opponent: c.opponent,
         tags: c.tags || [],
         healthScore: c.health_score,
         createdAt: c.created_at,
         updatedAt: c.updated_at,
-        lawyerName: (c as any).profiles?.name || 'Unassigned'
+        lawyerName: (c as any).profiles?.name || 'Unassigned',
+        officeName: (c as any).offices?.name || 'Main Office'
       })) as AppCase[],
       totalCount: count || 0
     };
@@ -38,7 +40,7 @@ export const caseService = {
   async getCaseById(id: string) {
     const { data, error } = await supabase
       .from('cases')
-      .select('*, client:clients(*), lawyer:profiles(*)')
+      .select('*, client:clients(*), lawyer:profiles(*), office:offices(*)')
       .eq('id', id)
       .single();
 
@@ -78,5 +80,21 @@ export const caseService = {
 
     if (error) throw error;
     return data as TimelineEntry[];
+  },
+
+  async transferCase(caseId: string, lawyerId: string, officeId: string) {
+    const { data, error } = await supabase
+      .from('cases')
+      .update({ 
+        lawyer_id: lawyerId, 
+        office_id: officeId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', caseId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };

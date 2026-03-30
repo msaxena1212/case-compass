@@ -18,7 +18,7 @@ export const officeService = {
     const { data, error, count } = await supabase
       .from('profiles')
       .select('*, office:offices(name)', { count: 'exact' })
-      .order('full_name')
+      .order('name')
       .range(from, to);
 
     if (error) throw error;
@@ -26,7 +26,7 @@ export const officeService = {
     return {
       data: (data || []).map(u => ({
         id: u.id,
-        name: u.full_name,
+        name: u.name,
         email: u.email,
         role: u.role,
         officeId: u.office_id,
@@ -61,5 +61,48 @@ export const officeService = {
       })),
       totalCount: count || 0
     };
+  },
+
+  async createStaffMember(staffData: {
+    name: string;
+    email: string;
+    role: string;
+    officeId: string;
+    department: string;
+  }) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert([{
+        id: crypto.randomUUID(), // Mocking UUID for now, in real apps auth.signup handles this
+        name: staffData.name,
+        email: staffData.email,
+        role: staffData.role,
+        office_id: staffData.officeId,
+        department: staffData.department,
+        status: 'Active'
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getStaffByOffice(officeId: string) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('office_id', officeId)
+      .eq('status', 'Active')
+      .order('name');
+
+    if (error) throw error;
+    return (data || []).map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      officeId: u.office_id
+    }));
   }
 };

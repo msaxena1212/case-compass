@@ -5,9 +5,10 @@ import { Label } from "@/components/ui/label";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billingService";
+import { clientService } from "@/services/clientService";
 import { Payment, PaymentMode } from "@/types/billing";
 import { toast } from "sonner";
-import { IndianRupee, Loader2 } from "lucide-react";
+import { IndianRupee, Loader2, User } from "lucide-react";
 
 type RecordPaymentModalProps = {
   isOpen: boolean;
@@ -18,11 +19,20 @@ type RecordPaymentModalProps = {
 };
 
 export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceId, onSuccess, onCreateInvoice }: RecordPaymentModalProps) {
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [invoiceId, setInvoiceId] = useState(defaultInvoiceId || '');
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState<PaymentMode>('Bank Transfer');
   const [refNum, setRefNum] = useState('');
   const queryClient = useQueryClient();
+
+  // Fetch all clients for the first dropdown
+  const { data: clientsResponse, isLoading: isLoadingClients } = useQuery({
+    queryKey: ['clients-lookup'],
+    queryFn: () => clientService.getAllClients(1, 1000),
+    enabled: isOpen
+  });
+  const clients = clientsResponse?.data || [];
 
   // Fetch all invoices
   const { data: invoicesResponse, isLoading: isLoadingInvoices } = useQuery({
@@ -30,7 +40,6 @@ export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceI
     queryFn: () => billingService.getAllInvoices(1, 1000),
     enabled: isOpen
   });
-  const invoicesLoading = isLoadingInvoices;
   const invoices = invoicesResponse?.data || [];
 
   // Fetch all payments to calculate balances
@@ -40,10 +49,14 @@ export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceI
     enabled: isOpen
   });
 
-  const eligibleInvoices = useMemo(() => 
-    invoices.filter(inv => inv.status !== 'Paid'),
-    [invoices]
-  );
+  // Filter invoices based on selected client
+  const filteredInvoices = useMemo(() => {
+    let list = invoices.filter(inv => inv.status !== 'Paid');
+    if (selectedClientId) {
+      list = list.filter(inv => inv.clientId === selectedClientId);
+    }
+    return list;
+  }, [invoices, selectedClientId]);
   
   const selectedInvoice = useMemo(() => 
     invoices.find(inv => inv.id === invoiceId),
@@ -117,6 +130,31 @@ export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceI
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          {/* Step 1: Select Client */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <User className="h-3.5 w-3.5 opacity-70" /> Select Client *
+            </Label>
+            <select 
+              value={selectedClientId}
+              onChange={e => {
+                setSelectedClientId(e.target.value);
+                setInvoiceId(''); // Reset invoice when client changes
+                setAmount('');
+              }}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              required
+            >
+              <option value="">{isLoadingClients ? 'Loading clients...' : 'Choose a client...'}</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Step 2: Select Invoice */}
           <div className="space-y-2">
             <Label>Select Invoice *</Label>
             <select 
@@ -125,11 +163,19 @@ export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceI
                 setInvoiceId(e.target.value);
                 setAmount(getRemainingBalance(e.target.value).toString()); // Auto-fill remaining
               }}
+              disabled={!selectedClientId}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               required
             >
-              <option value="">Choose an open invoice...</option>
-              {eligibleInvoices.map(inv => {
+              <option value="">
+                {!selectedClientId 
+                  ? 'Select a client first' 
+                  : filteredInvoices.length === 0 
+                    ? 'No open invoices for this client' 
+                    : 'Choose an open invoice...'
+                }
+              </option>
+              {filteredInvoices.map(inv => {
                 const bal = getRemainingBalance(inv.id);
                 return (
                   <option key={inv.id} value={inv.id}>
@@ -138,9 +184,9 @@ export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceI
                 );
               })}
             </select>
-            {eligibleInvoices.length === 0 && !invoicesLoading && (
+            {selectedClientId && filteredInvoices.length === 0 && !isLoadingInvoices && (
               <div className="mt-2 p-3 bg-amber-50 border border-amber-100 rounded-md">
-                <p className="text-xs text-amber-700 font-medium">No open invoices found for recording payments.</p>
+                <p className="text-xs text-amber-700 font-medium">No open invoices found for this client.</p>
                 <Button 
                   type="button" 
                   variant="link" 
@@ -163,6 +209,7 @@ export function RecordPaymentModal({ isOpen, onClose, invoiceId: defaultInvoiceI
               step="0.01"
               value={amount}
               onChange={e => setAmount(e.target.value)}
+              disabled={!invoiceId}
               required
             />
             {selectedInvoice && (

@@ -24,9 +24,15 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { IndianRupee, UserPlus, Sparkles } from "lucide-react";
 
 export default function NotificationsHub() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<NotificationType | 'All'>('All');
   const [channelFilter, setChannelFilter] = useState<NotificationChannel | 'All'>('All');
 
@@ -43,6 +49,51 @@ export default function NotificationsHub() {
     queryKey: ['communication-logs', logPage],
     queryFn: () => communicationService.getCommunicationLogs(logPage, pageSize)
   });
+
+  const mutation = useMutation({
+    mutationFn: (notif: any) => communicationService.createNotification(notif),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success("Sample notification generated!");
+    },
+    onError: (err: any) => {
+      toast.error(`Generation failed: ${err.message}`);
+    }
+  });
+
+  const generateSample = () => {
+    if (!user) {
+      toast.error("User context missing");
+      return;
+    }
+
+    const samples = [
+      {
+        userId: user.id,
+        title: "Upcoming Hearing",
+        message: "You have a hearing for 'Union of India vs XYZ Corp' in Delhi High Court tomorrow at 10:30 AM.",
+        type: "Hearing",
+        actionUrl: "/calendar"
+      },
+      {
+        userId: user.id,
+        title: "Invoice Overdue",
+        message: "Invoice INV-2026-004 for 'Reliance Industries' is now 5 days overdue.",
+        type: "Billing",
+        actionUrl: "/billing"
+      },
+      {
+        userId: user.id,
+        title: "New Task Assigned",
+        message: "A new research task 'Precedents for Sec 138' has been assigned to you by Partner.",
+        type: "Task",
+        actionUrl: "/tasks"
+      }
+    ];
+
+    const randomSample = samples[Math.floor(Math.random() * samples.length)];
+    mutation.mutate(randomSample);
+  };
 
   const notifications = notificationResponse?.data || [];
   const totalNotifications = notificationResponse?.totalCount || 0;
@@ -100,9 +151,15 @@ export default function NotificationsHub() {
               Centralized view of all automated alerts and client communications.
             </p>
           </div>
-          <Button variant="outline" className="gap-2">
-            <Filter className="h-4 w-4" /> Export Logs
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={generateSample} disabled={mutation.isPending} variant="outline" className="gap-2 border-dashed border-accent/40 hover:bg-accent/5 text-accent font-bold">
+              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Generate Sample
+            </Button>
+            <Button variant="outline" className="gap-2">
+              <Filter className="h-4 w-4" /> Export Logs
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="notifications" className="space-y-6">

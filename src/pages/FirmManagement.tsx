@@ -10,16 +10,19 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Building2, Users, PieChart, MapPin, Phone,
   TrendingUp, Plus, ChevronRight, Globe, TrendingDown,
-  Mail, Briefcase, GraduationCap, ArrowRightLeft, Loader2
+  Mail, Briefcase, GraduationCap, ArrowRightLeft, Loader2, Shield
 } from "lucide-react";
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { AddStaffModal } from "@/components/AddStaffModal";
+import { AccessControlMatrix } from "@/components/AccessControlMatrix";
 
 export default function FirmManagement() {
   const [activeTab, setActiveTab] = useState("offices");
   const [officePage, setOfficePage] = useState(1);
   const [staffPage, setStaffPage] = useState(1);
+  const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
   const pageSize = 10;
 
   const { data: allOffices = [] } = useQuery({
@@ -121,6 +124,9 @@ export default function FirmManagement() {
             <TabsTrigger value="team" className="rounded-none h-full bg-transparent border-b-2 border-transparent data-[state=active]:border-accent data-[state=active]:bg-transparent px-1 text-xs font-bold gap-2">
               <Users className="h-4 w-4" /> Global Team
             </TabsTrigger>
+            <TabsTrigger value="permissions" className="rounded-none h-full bg-transparent border-b-2 border-transparent data-[state=active]:border-accent data-[state=active]:bg-transparent px-1 text-xs font-bold gap-2">
+              <Shield className="h-4 w-4" /> Permissions
+            </TabsTrigger>
             <TabsTrigger value="performance" className="rounded-none h-full bg-transparent border-b-2 border-transparent data-[state=active]:border-accent data-[state=active]:bg-transparent px-1 text-xs font-bold gap-2">
               <PieChart className="h-4 w-4" /> Revenue Intelligence
             </TabsTrigger>
@@ -217,7 +223,12 @@ export default function FirmManagement() {
           </TabsContent>
 
           {/* Global Team Tab */}
-          <TabsContent value="team" className="pt-6 m-0">
+          <TabsContent value="team" className="pt-6 m-0 space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={() => setIsAddStaffOpen(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 text-xs">
+                <Plus className="h-4 w-4" /> Add Team Member
+              </Button>
+            </div>
             <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
               <Table>
                 <TableHeader className="bg-muted/30">
@@ -298,6 +309,11 @@ export default function FirmManagement() {
             )}
           </TabsContent>
 
+          {/* Permissions Tab */}
+          <TabsContent value="permissions" className="pt-6 m-0">
+            <AccessControlMatrix />
+          </TabsContent>
+
           {/* Revenue Tab */}
           <TabsContent value="performance" className="pt-6 m-0 space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -366,6 +382,11 @@ export default function FirmManagement() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <AddStaffModal 
+        isOpen={isAddStaffOpen} 
+        onClose={() => setIsAddStaffOpen(false)} 
+      />
     </AppLayout>
   );
 }

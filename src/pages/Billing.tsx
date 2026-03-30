@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { 
   Search, Plus, Clock, IndianRupee, FileText, Timer,
-  Play, Pause, TrendingUp, Receipt, Download, Send, CreditCard, Loader2
+  Play, Pause, TrendingUp, Receipt, Download, Send, CreditCard, Loader2, AlertCircle
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -147,6 +147,30 @@ function ActiveTimer() {
 
 // --- Main Billing Page ---
 export default function Billing() {
+  try {
+    return <BillingContent />;
+  } catch (error) {
+    console.error("Billing Component Crash:", error);
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4 p-4 text-center">
+          <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center text-destructive mb-4">
+            <AlertCircle className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold italic">Application Error</h2>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            A critical error occurred while rendering the billing ledger. This is usually due to unexpected data formats.
+          </p>
+          <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">
+            Reload Page
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
+}
+
+function BillingContent() {
   const [search, setSearch] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [timeModalOpen, setTimeModalOpen] = useState(false);
@@ -157,12 +181,12 @@ export default function Billing() {
   const pageSize = 10;
   const queryClient = useQueryClient();
 
-  const { data: invoiceResponse, isLoading: loadingInvoices } = useQuery({
+  const { data: invoiceResponse, isLoading: loadingInvoices, isError: errorInvoices, refetch: refetchInvoices } = useQuery({
     queryKey: ['invoices', invoicePage],
     queryFn: () => billingService.getAllInvoices(invoicePage, pageSize)
   });
 
-  const { data: timeResponse, isLoading: loadingTime } = useQuery({
+  const { data: timeResponse, isLoading: loadingTime, isError: errorTime, refetch: refetchTime } = useQuery({
     queryKey: ['timeEntries', timePage],
     queryFn: () => billingService.getTimeEntries(timePage, pageSize)
   });
@@ -176,13 +200,14 @@ export default function Billing() {
   const totalTimePages = Math.ceil(totalTimeEntries / pageSize);
 
   const isLoading = loadingInvoices || loadingTime;
+  const isError = errorInvoices || errorTime;
 
   const stats = useMemo(() => {
-    const totalRev = invoices.reduce((s, i) => s + i.total, 0);
-    const totalPaid = invoices.filter(i => i.status === "Paid").reduce((s, i) => s + i.total, 0);
-    const totalPending = invoices.filter(i => i.status === "Unpaid" || i.status === "Partial").reduce((s, i) => s + i.total, 0);
-    const totalOverdue = invoices.filter(i => i.status === "Overdue").reduce((s, i) => s + i.total, 0);
-    const unbilledAmt = timeEntries.filter(t => t.billable && !t.billed).reduce((s, t) => s + ((t.durationMinutes/60) * t.ratePerHour), 0);
+    const totalRev = invoices.reduce((s, i) => s + (i.total || 0), 0);
+    const totalPaid = invoices.filter(i => (i.status || "").toLowerCase() === "paid").reduce((s, i) => s + (i.total || 0), 0);
+    const totalPending = invoices.filter(i => ["unpaid", "partial"].includes((i.status || "").toLowerCase())).reduce((s, i) => s + (i.total || 0), 0);
+    const totalOverdue = invoices.filter(i => (i.status || "").toLowerCase() === "overdue").reduce((s, i) => s + (i.total || 0), 0);
+    const unbilledAmt = timeEntries.filter(t => t.billable && !t.billed).reduce((s, t) => s + (((t.durationMinutes || 0)/60) * (t.ratePerHour || 0)), 0);
 
     return { totalRev, totalPaid, totalPending, totalOverdue, unbilledAmt };
   }, [invoices, timeEntries]);
@@ -193,6 +218,35 @@ export default function Billing() {
         <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-4">
           <Loader2 className="h-12 w-12 text-accent animate-spin" />
           <p className="text-sm font-bold text-muted-foreground animate-pulse">Syncing Billing Ledger...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (isError) {
+    return (
+      <AppLayout>
+        <div className="h-[80vh] w-full flex flex-col items-center justify-center gap-6 text-center max-w-md mx-auto">
+          <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center text-destructive mx-auto">
+            <AlertCircle className="h-8 w-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-display font-bold">Ledger Sync Failed</h2>
+            <p className="text-sm text-muted-foreground">
+              We couldn't reach the billing database. This usually means the required tables haven't been created yet.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 w-full">
+            <Button onClick={() => { refetchInvoices(); refetchTime(); }} className="w-full">
+              Retry Connection
+            </Button>
+            <Button variant="outline" onClick={() => window.open('https://supabase.com/dashboard', '_blank')} className="w-full text-xs">
+              Check Supabase Dashboard
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground bg-muted/30 p-2 rounded-md border border-dashed border-border/60">
+            Tip: Run the SQL script <code className="bg-muted px-1">supabase/ensure_billing_schema.sql</code> in your Supabase SQL Editor.
+          </p>
         </div>
       </AppLayout>
     );
@@ -282,12 +336,12 @@ export default function Billing() {
                     .map((inv) => {
                       return (
                         <div
-                          key={inv.id}
+                          key={inv.id || Math.random().toString()}
                           className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer items-center group"
                           onClick={() => setSelectedInvoice(inv)}
                         >
                           <div className="col-span-2 font-mono text-sm font-medium flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-primary" /> {inv.id}
+                            <FileText className="h-4 w-4 text-primary" /> {inv.id || 'N/A'}
                           </div>
                           <div className="col-span-3">
                             <p className="text-sm font-medium group-hover:text-primary transition-colors">{inv.clientName || 'Unknown Client'}</p>
@@ -303,7 +357,7 @@ export default function Billing() {
                               Due: {formatDate(inv.dueDate)}
                             </p>
                           </div>
-                          <div className="col-span-1"><StatusBadge status={inv.status.toLowerCase() as any} /></div>
+                          <div className="col-span-1"><StatusBadge status={inv.status} /></div>
                           <div className="col-span-2 flex gap-1 justify-end">
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => e.stopPropagation()}>
                               <Download className="h-4 w-4" />
@@ -394,7 +448,9 @@ export default function Billing() {
                         </div>
                           <div className="col-span-2 text-xs">
                             <p>{formatDate(entry.date)}</p>
-                            <p className="text-muted-foreground mt-0.5">{entry.userId.split('-')[0]}</p>
+                            <p className="text-muted-foreground mt-0.5 truncate" title={entry.userId}>
+                              {(entry.userId || 'User').split('-')[0] || 'User'}
+                            </p>
                           </div>
                         <div className="col-span-1 text-sm font-mono font-medium text-center">
                           {Math.floor(entry.durationMinutes / 60)}h {entry.durationMinutes % 60}m

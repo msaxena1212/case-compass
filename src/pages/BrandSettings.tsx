@@ -8,8 +8,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { 
   Palette, Upload, Eye, Save, CheckCircle2, 
-  FileText, Mail, Loader2, Building2
+  FileText, Mail, Loader2, Building2, Maximize2
 } from "lucide-react";
+import { BrandPreviewModal } from "@/components/BrandPreviewModal";
 
 const invoiceTemplates = [
   { id: 'classic', name: 'Classic', description: 'Traditional formal layout', preview: 'border-2 border-gray-300 bg-white' },
@@ -32,6 +33,7 @@ export default function BrandSettings() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [selectedInvoiceTemplate, setSelectedInvoiceTemplate] = useState('modern');
   const [isSaving, setIsSaving] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [tagline, setTagline] = useState('Justice Through Excellence');
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,7 +156,14 @@ export default function BrandSettings() {
                   <div className="h-2 rounded-full" style={{ background: secondaryColor, width: '40%' }} />
                 </div>
                 <div className="text-center pt-2">
-                  <span className="text-[9px] uppercase font-bold tracking-widest" style={{ color: secondaryColor }}>Invoice Sample</span>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full text-[10px] font-bold uppercase tracking-wider gap-2 h-8"
+                    onClick={() => setIsPreviewOpen(true)}
+                  >
+                    <Maximize2 className="h-3 w-3" /> Full Brand Preview
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -218,6 +227,17 @@ export default function BrandSettings() {
           </CardContent>
         </Card>
       </div>
+
+      <BrandPreviewModal 
+        isOpen={isPreviewOpen} 
+        onClose={() => setIsPreviewOpen(false)} 
+        firmName={firmName}
+        tagline={tagline}
+        logo={logoPreview}
+        primaryColor={primaryColor}
+        secondaryColor={secondaryColor}
+        templateId={selectedInvoiceTemplate}
+      />
     </AppLayout>
   );
 }

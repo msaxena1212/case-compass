@@ -17,7 +17,8 @@ import {
   Edit3,
   Save,
   X,
-  AlertCircle
+  AlertCircle,
+  ArrowRightLeft
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
@@ -39,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { toast } from "sonner";
+import { TransferCaseModal } from "@/components/TransferCaseModal";
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
@@ -69,6 +71,7 @@ export default function CaseDetail() {
   const [newNoteContent, setNewNoteContent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState('');
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   const { data: hearingsResponse, isLoading: loadingHearings } = useQuery({
     queryKey: ['hearings', id, hearingPage],
@@ -222,6 +225,14 @@ export default function CaseDetail() {
 
   return (
     <AppLayout>
+      <TransferCaseModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        caseId={id || ''}
+        caseTitle={caseData.title}
+        currentOfficeId={caseData.office_id}
+        currentLawyerId={caseData.lawyer_id}
+      />
       <div className="space-y-6 max-w-7xl mx-auto">
         {/* Header Navigation */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -263,6 +274,17 @@ export default function CaseDetail() {
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
               <Activity className={`h-6 w-6 ${healthScore > 80 ? 'text-green-500' : healthScore > 50 ? 'text-yellow-500' : 'text-red-500'}`} />
             </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsTransferModalOpen(true)}
+              className="gap-2 border-accent/20 hover:border-accent/40 bg-accent/5"
+            >
+              <ArrowRightLeft className="h-4 w-4 text-accent" />
+              Transfer Case
+            </Button>
           </div>
         </div>
 
