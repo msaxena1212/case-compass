@@ -70,5 +70,37 @@ export const knowledgeBaseService = {
       const { data: current } = await supabase.from('knowledge_base').select('views').eq('id', id).single();
       await supabase.from('knowledge_base').update({ views: (current?.views || 0) + 1 }).eq('id', id);
     }
+  },
+
+  async saveWebResultToKnowledgeBase(result: { title: string; snippet: string; url: string; source: string }, type: 'Judgment' | 'Act' | 'Template' = 'Judgment') {
+    const { data, error } = await supabase
+      .from('knowledge_base')
+      .insert({
+        title: result.title,
+        type,
+        snippet: result.snippet,
+        content: result.snippet,
+        tags: ['Web Import', result.source],
+        ai_summary: `Imported from web: ${result.source}`,
+        url: result.url,
+        date_added: new Date().toISOString(),
+        views: 0,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return {
+      id: data.id,
+      title: data.title,
+      type: data.type,
+      snippet: data.snippet,
+      content: data.content,
+      tags: data.tags || [],
+      aiSummary: data.ai_summary,
+      url: data.url,
+      dateAdded: data.date_added,
+      views: data.views || 0,
+    } as KnowledgeItem;
   }
 };

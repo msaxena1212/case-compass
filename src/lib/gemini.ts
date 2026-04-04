@@ -3,19 +3,19 @@
 export const isGeminiAvailable = true;
 
 const OLLAMA_URL = "http://localhost:11434/api/generate";
-const DEFAULT_MODEL = "glm-5:cloud";
+const DEFAULT_MODEL = "nemotron-3-nano:30b-cloud";
 
 export async function generateLegalContent(prompt: string, modelName: string = DEFAULT_MODEL) {
   const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const bypassActive = true; // Enforced bypass for demo purposes
+  const bypassActive = false; // Disabling bypass to allow real AI requests
 
   if (isLocalhost && bypassActive) {
     console.log("gemini.ts: Using AI bypass for local development");
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
+
     // Simple hash to vary response based on document content
     const hash = prompt.length % 3;
-    
+
     // Mock Comparison Data
     if (prompt.includes('similarities') && prompt.includes('differences')) {
       const comparisons = [
@@ -40,7 +40,7 @@ export async function generateLegalContent(prompt: string, modelName: string = D
       ];
       return JSON.stringify(comparisons[hash]);
     }
-    
+
     // Mock Risk Analysis (JSON)
     if (prompt.toLowerCase().includes('json')) {
       const risks = [
@@ -60,7 +60,7 @@ export async function generateLegalContent(prompt: string, modelName: string = D
       ];
       return JSON.stringify(risks[hash]);
     }
-    
+
     // Mock Summaries
     const summaries = [
       "This document outlines standard legal terms and conditions. It specifies the obligations of tracking software usage, standard confidentiality, and establishes immediate breach notification protocols.",
@@ -80,16 +80,16 @@ export async function generateLegalContent(prompt: string, modelName: string = D
         stream: false
       })
     });
-    
+
     if (!response.ok) {
       let errText = response.statusText;
       try {
         const errJson = await response.json();
         if (errJson.error) errText = errJson.error;
-      } catch (e) {}
+      } catch (e) { }
       throw new Error(`Ollama API error: ${errText}`);
     }
-    
+
     const data = await response.json();
     return data.response;
   } catch (error) {
@@ -115,7 +115,7 @@ export async function* generateLegalContentStream(prompt: string, modelName: str
       try {
         const errJson = await response.clone().json();
         if (errJson.error) errText = errJson.error;
-      } catch (e) {}
+      } catch (e) { }
       throw new Error(`Ollama API error: ${errText}`);
     }
 
@@ -126,11 +126,11 @@ export async function* generateLegalContentStream(prompt: string, modelName: str
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-      
+
       for (const line of lines) {
         if (!line.trim()) continue;
         try {

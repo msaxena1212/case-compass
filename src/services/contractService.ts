@@ -82,15 +82,16 @@ export const contractService = {
         status: contractData.status,
         party_a: contractData.parties.partyA,
         party_b: contractData.parties.partyB,
-        case_id: contractData.caseId,
-        client_id: contractData.clientId,
+        // Explicitly convert empty string / undefined to null to avoid UUID parse errors
+        case_id:    (contractData.caseId   && contractData.caseId   !== 'none') ? contractData.caseId   : null,
+        client_id:  (contractData.clientId && contractData.clientId !== 'none') ? contractData.clientId : null,
         risk_score: contractData.riskScore,
         clauses: contractData.clauses,
         approvals: contractData.approvals,
-        value: contractData.value,
-        start_date: contractData.startDate,
-        expiry_date: contractData.expiryDate,
-        signed_date: contractData.signedDate,
+        value:        contractData.value      || null,
+        start_date:   contractData.startDate  || null,
+        expiry_date:  contractData.expiryDate || null,
+        signed_date:  contractData.signedDate || null,
         version: contractData.version
       }])
       .select()

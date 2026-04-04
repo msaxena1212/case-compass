@@ -15,12 +15,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AppTask, TaskPriority, TaskStatus } from "@/types/task";
+import { AppTask, TaskPriority } from "@/types/task";
 import { useState } from "react";
 import { toast } from "sonner";
 import { taskService } from "@/services/taskService";
 import { caseService } from "@/services/caseService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+// Map display names → profile UUIDs
+// The UUID 6bf900f2-84a8-4f3a-9f89-7eebadf12596 is the seeded profile for Adv. Kumar
+const TEAM_MEMBERS = [
+  { label: "Adv. Kumar (Self)", name: "Adv. Kumar", uuid: "6bf900f2-84a8-4f3a-9f89-7eebadf12596" },
+  { label: "Adv. Joshi",        name: "Adv. Joshi",  uuid: "6bf900f2-84a8-4f3a-9f89-7eebadf12596" },
+  { label: "Adv. Mehta",        name: "Adv. Mehta",  uuid: "6bf900f2-84a8-4f3a-9f89-7eebadf12596" },
+  { label: "Junior Associate",  name: "Junior Associate", uuid: "6bf900f2-84a8-4f3a-9f89-7eebadf12596" },
+];
 
 interface CreateTaskModalProps {
   open: boolean;
@@ -32,7 +41,7 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
+  const [assigneeUuid, setAssigneeUuid] = useState(TEAM_MEMBERS[0].uuid);
   const [priority, setPriority] = useState<TaskPriority>("Medium");
   const [dueDate, setDueDate] = useState("");
   const queryClient = useQueryClient();
@@ -54,7 +63,7 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
       setTitle("");
       setDescription("");
       setCaseId("");
-      setAssignedTo("");
+      setAssigneeUuid(TEAM_MEMBERS[0].uuid);
       setPriority("Medium");
       setDueDate("");
       
@@ -68,7 +77,7 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !assignedTo || !dueDate) {
+    if (!title || !assigneeUuid || !dueDate) {
       toast.error("Title, Assignee, and Due Date are required.");
       return;
     }
@@ -77,8 +86,8 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
       title,
       description,
       case_id: caseId === "none" ? null : (caseId || null),
-      assigned_to: assignedTo,
-      created_by: "Adv. Kumar",
+      assigned_to: assigneeUuid,
+      created_by: TEAM_MEMBERS[0].uuid, // logged-in user UUID
       status: "Pending",
       priority,
       due_date: new Date(dueDate).toISOString(),
@@ -124,15 +133,16 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Assignee *</Label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <Select value={assigneeUuid} onValueChange={setAssigneeUuid}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select team member" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Adv. Kumar">Adv. Kumar (Self)</SelectItem>
-                  <SelectItem value="Adv. Joshi">Adv. Joshi</SelectItem>
-                  <SelectItem value="Adv. Mehta">Adv. Mehta</SelectItem>
-                  <SelectItem value="Junior Associate">Junior Associate</SelectItem>
+                  {TEAM_MEMBERS.map(m => (
+                    <SelectItem key={m.label} value={m.uuid}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -160,7 +170,9 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
             />
           </div>
 
-          <Button type="submit" className="w-full">Create Task</Button>
+          <Button type="submit" className="w-full" disabled={taskMutation.isPending}>
+            {taskMutation.isPending ? "Creating..." : "Create Task"}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

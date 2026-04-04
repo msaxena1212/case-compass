@@ -93,6 +93,18 @@ export default function Tasks() {
     updateStatusMutation.mutate({ id: task.id, status: 'In Progress' });
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, status: TaskStatus) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('taskId');
+    if (taskId) {
+      updateStatusMutation.mutate({ id: taskId, status });
+    }
+  };
+
   if (loadingTasks) {
     return (
       <AppLayout>
@@ -106,7 +118,11 @@ export default function Tasks() {
 
   const TaskCard = ({ task }: { task: AppTask }) => {
     return (
-      <div className="p-4 border rounded-lg bg-card shadow-sm hover:shadow-md transition-all group flex flex-col h-full animate-in fade-in slide-in-from-bottom-2">
+      <div 
+        draggable
+        onDragStart={(e) => e.dataTransfer.setData('taskId', task.id)}
+        className="cursor-move p-4 border rounded-lg bg-card shadow-sm hover:shadow-md transition-all group flex flex-col h-full animate-in fade-in slide-in-from-bottom-2"
+      >
         <div className="flex justify-between items-start mb-2">
           <div className="flex gap-2 items-center">
             <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${getStatusColor(task.status === 'Pending' && new Date(task.dueDate) < new Date() ? 'Overdue' : task.status)}`}>
@@ -211,8 +227,12 @@ export default function Tasks() {
         {/* Kanban / Tasks Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
            
-           {/* Column 1: Overdue / Critical */}
-           <div className="space-y-4">
+           {/* Column 1: Overdue / Critical (status: Pending) */}
+           <div 
+             className="space-y-4"
+             onDragOver={handleDragOver}
+             onDrop={(e) => handleDrop(e, 'Pending')}
+           >
              <div className="flex items-center justify-between border-b pb-2 border-destructive/20">
                <h3 className="font-bold text-sm text-destructive flex items-center gap-1.5"><AlertCircle className="h-4 w-4"/> Critical / Delayed</h3>
                <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded-full">{overdueTasks.length}</span>
@@ -224,7 +244,11 @@ export default function Tasks() {
            </div>
 
            {/* Column 2: In Progress */}
-           <div className="space-y-4">
+           <div 
+             className="space-y-4"
+             onDragOver={handleDragOver}
+             onDrop={(e) => handleDrop(e, 'In Progress')}
+           >
              <div className="flex items-center justify-between border-b pb-2 border-blue-200">
                <h3 className="font-bold text-sm text-blue-700 flex items-center gap-1.5"><Clock className="h-4 w-4"/> In Progress</h3>
                <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{inProgressTasks.length}</span>
@@ -236,7 +260,11 @@ export default function Tasks() {
            </div>
 
            {/* Column 3: Pending */}
-           <div className="space-y-4">
+           <div 
+             className="space-y-4"
+             onDragOver={handleDragOver}
+             onDrop={(e) => handleDrop(e, 'Pending')}
+           >
              <div className="flex items-center justify-between border-b pb-2 border-slate-200">
                <h3 className="font-bold text-sm text-slate-700 flex items-center gap-1.5"><ListTodo className="h-4 w-4"/> To-Do Pipeline</h3>
                <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2 py-0.5 rounded-full">{pendingTasks.length}</span>
@@ -247,8 +275,12 @@ export default function Tasks() {
              </div>
            </div>
 
-           {/* Column 4: Recently Completed (Optional 4th column for wide screens, or stacks below in mobile) */}
-           <div className="space-y-4 md:col-span-full xl:col-span-1 border-t xl:border-t-0 xl:border-l pt-6 xl:pt-0 xl:pl-6">
+           {/* Column 4: Recently Completed */}
+           <div 
+             className="space-y-4 md:col-span-full xl:col-span-1 border-t xl:border-t-0 xl:border-l pt-6 xl:pt-0 xl:pl-6"
+             onDragOver={handleDragOver}
+             onDrop={(e) => handleDrop(e, 'Completed')}
+           >
              <div className="flex items-center justify-between border-b pb-2 border-emerald-200">
                <h3 className="font-bold text-sm text-emerald-700 flex items-center gap-1.5"><Archive className="h-4 w-4"/> Recently Finished</h3>
                <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">{completedTasks.length}</span>
