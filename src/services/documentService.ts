@@ -212,9 +212,26 @@ export const documentService = {
   },
 
   async updateDocument(id: string, updates: Partial<LegalDocument>) {
+    const dbUpdates: any = {...updates};
+    
+    // Map camelCase to snake_case for Supabase
+    if ('aiSummary' in updates) { dbUpdates.ai_summary = updates.aiSummary; delete dbUpdates.aiSummary; }
+    if ('aiKeywords' in updates) { dbUpdates.ai_keywords = updates.aiKeywords; delete dbUpdates.aiKeywords; }
+    if ('riskClauses' in updates) { dbUpdates.risk_clauses = updates.riskClauses; delete dbUpdates.riskClauses; }
+    if ('signatureStatus' in updates) { dbUpdates.signature_status = updates.signatureStatus; delete dbUpdates.signatureStatus; }
+    if ('signedAt' in updates) { dbUpdates.signed_at = updates.signedAt; delete dbUpdates.signedAt; }
+    if ('signedBy' in updates) { dbUpdates.signed_by = updates.signedBy; delete dbUpdates.signedBy; }
+    if ('isEncrypted' in updates) { dbUpdates.is_encrypted = updates.isEncrypted; delete dbUpdates.isEncrypted; }
+    if ('caseId' in updates) { dbUpdates.case_id = updates.caseId; delete dbUpdates.caseId; }
+    if ('fileName' in updates) { dbUpdates.file_name = updates.fileName; delete dbUpdates.fileName; }
+    if ('fileType' in updates) { dbUpdates.file_type = updates.fileType; delete dbUpdates.fileType; }
+    if ('documentType' in updates) { dbUpdates.document_type = updates.documentType; delete dbUpdates.documentType; }
+    if ('versionNumber' in updates) { dbUpdates.version_number = updates.versionNumber; delete dbUpdates.versionNumber; }
+    if ('uploadedBy' in updates) { dbUpdates.uploaded_by = updates.uploadedBy; delete dbUpdates.uploadedBy; }
+
     const { data, error } = await supabase
       .from('documents')
-      .update(updates)
+      .update(dbUpdates)
       .eq('id', id)
       .select()
       .single();

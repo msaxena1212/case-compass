@@ -41,9 +41,10 @@ type DocumentDetailPanelProps = {
   document: LegalDocument | null;
   isOpen: boolean;
   onClose: () => void;
+  onUpdate?: (doc: LegalDocument) => void;
 };
 
-export function DocumentDetailPanel({ document: doc, isOpen, onClose }: DocumentDetailPanelProps) {
+export function DocumentDetailPanel({ document: doc, isOpen, onClose, onUpdate }: DocumentDetailPanelProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showVersionModal, setShowVersionModal] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
@@ -72,11 +73,19 @@ export function DocumentDetailPanel({ document: doc, isOpen, onClose }: Document
       }
 
       // 3. Update Supabase
-      await documentService.updateDocument(doc.id, {
+      const updates = {
         aiSummary: summary,
         riskClauses: riskClauses,
-        status: 'active'
-      });
+        status: 'active' as const
+      };
+      await documentService.updateDocument(doc.id, updates);
+
+      if (onUpdate) {
+        onUpdate({
+          ...doc,
+          ...updates
+        });
+      }
 
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       toast.success("AI Analysis complete!");
@@ -174,7 +183,15 @@ export function DocumentDetailPanel({ document: doc, isOpen, onClose }: Document
                 </Button>
               </CardContent>
             </Card>
-          ) : !isAnalyzing && (
+          ) : isAnalyzing ? (
+            <div className="bg-muted/5 border border-purple-200/50 bg-gradient-to-br from-purple-50/30 to-blue-50/20 rounded-xl p-8 text-center space-y-4">
+               <Loader2 className="h-10 w-10 text-purple-600 animate-spin mx-auto" />
+               <div className="space-y-1">
+                 <p className="text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 animate-pulse">AI Analysis in progress...</p>
+                 <p className="text-xs text-muted-foreground">Extracting risks, summaries, and key dates.</p>
+               </div>
+            </div>
+          ) : (
             <div className="bg-muted/10 border border-dashed rounded-xl p-6 text-center space-y-3">
                <div className="h-12 w-12 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
                   <Brain className="h-6 w-6 text-muted-foreground/40" />

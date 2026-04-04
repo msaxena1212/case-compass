@@ -400,6 +400,7 @@ export default function Documents() {
           document={selectedDoc}
           isOpen={!!selectedDoc}
           onClose={() => setSelectedDoc(null)}
+          onUpdate={setSelectedDoc}
         />
 
         <UploadDocumentModal 

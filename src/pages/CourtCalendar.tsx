@@ -19,25 +19,32 @@ export default function CourtCalendar() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [updateHearingId, setUpdateHearingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const itemsPerPage = 10;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['hearings', page],
-    queryFn: () => courtService.getAllHearings(page, pageSize)
+    queryKey: ['hearings'],
+    queryFn: () => courtService.getAllHearings(1, 1000)
   });
 
   const rawHearings = data?.data || [];
-  const totalCount = data?.totalCount || 0;
-  const totalPages = Math.ceil(totalCount / pageSize);
   
   // Sort hearings by date
   const sortedHearings = useMemo(() => [...rawHearings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [rawHearings]);
   
-  const today = new Date().toDateString();
-  const todaysHearings = sortedHearings.filter(h => new Date(h.date).toDateString() === today);
-  const upcomingHearings = sortedHearings.filter(h => new Date(h.date).getTime() > new Date().getTime() && new Date(h.date).toDateString() !== today);
+  const selectedDateStr = date ? date.toDateString() : new Date().toDateString();
+  const isTodaySelected = selectedDateStr === new Date().toDateString();
+  
+  const todaysHearings = sortedHearings.filter(h => new Date(h.date).toDateString() === selectedDateStr);
+  
+  // All future upcoming/adjourned hearings relative to selected date
+  const upcomingHearings = sortedHearings
+    .filter(h => h.status === 'Upcoming' || h.status === 'Adjourned')
+    .filter(h => new Date(h.date).getTime() > new Date(selectedDateStr).getTime() && new Date(h.date).toDateString() !== selectedDateStr);
+    
+  const paginatedUpcoming = upcomingHearings.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+  const totalPages = Math.ceil(upcomingHearings.length / itemsPerPage);
   
   const renderHearingCard = (h: any) => {
     const hearingDate = new Date(h.date);
@@ -156,22 +163,22 @@ export default function CourtCalendar() {
               <>
                 <section>
                   <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
-                    Today's Hearings ({todaysHearings.length})
+                    {isTodaySelected && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>}
+                    {isTodaySelected ? "Today's Hearings" : `Hearings on ${date?.toLocaleDateString()}`} ({todaysHearings.length})
                   </h2>
                   {todaysHearings.length > 0 ? (
                     todaysHearings.map(renderHearingCard)
                   ) : (
                     <div className="text-center py-8 bg-muted/30 rounded-lg border border-dashed">
-                      <p className="text-muted-foreground">No hearings scheduled for today.</p>
+                      <p className="text-muted-foreground">No hearings scheduled for {isTodaySelected ? 'today' : 'this date'}.</p>
                     </div>
                   )}
                 </section>
 
                 <section>
                   <h2 className="text-lg font-semibold mb-4 mt-8">Upcoming Hearings ({upcomingHearings.length})</h2>
-                  {upcomingHearings.length > 0 ? (
-                    upcomingHearings.map(renderHearingCard)
+                  {paginatedUpcoming.length > 0 ? (
+                    paginatedUpcoming.map(renderHearingCard)
                   ) : (
                     <div className="text-center py-8 bg-muted/30 rounded-lg border border-dashed">
                       <p className="text-muted-foreground">No upcoming hearings scheduled.</p>
