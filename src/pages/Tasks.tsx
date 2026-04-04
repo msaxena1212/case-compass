@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from 'react-router-dom';
 import { AppLayout } from "@/components/AppLayout";
 import { CreateTaskModal } from "@/components/CreateTaskModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,10 @@ export default function Tasks() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('Task updated');
+    },
+    onError: (err: any) => {
+      console.error(err);
+      toast.error('Failed to update task: ' + err.message);
     }
   });
 
@@ -75,10 +80,13 @@ export default function Tasks() {
   }, [viewMode, tasks]);
 
   // Grouping for Kanban/List
-  const overdueTasks = displayedTasks.filter(t => t.status === 'Overdue' || (t.status !== 'Completed' && new Date(t.dueDate) < new Date()));
-  const pendingTasks = displayedTasks.filter(t => t.status === 'Pending' && !overdueTasks.includes(t));
-  const inProgressTasks = displayedTasks.filter(t => t.status === 'In Progress' && !overdueTasks.includes(t));
+  const overdueTasks = displayedTasks.filter(t => t.status === 'Overdue' || (t.status === 'Pending' && new Date(t.dueDate) < new Date()));
+  const pendingTasks = displayedTasks.filter(t => t.status === 'Pending' && !overdueTasks.includes(t)).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  const inProgressTasks = displayedTasks.filter(t => t.status === 'In Progress').sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   const completedTasks = displayedTasks.filter(t => t.status === 'Completed').sort((a,b) => new Date(b.completedAt || '').getTime() - new Date(a.completedAt || '').getTime()).slice(0, 10);
+  
+  // For top stats only
+  const overdueCount = overdueTasks.length + displayedTasks.filter(t => t.status === 'In Progress' && new Date(t.dueDate) < new Date()).length;
 
   // Stats
   const completionRate = displayedTasks.length > 0 
@@ -94,6 +102,11 @@ export default function Tasks() {
   };
 
   const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
   };
 
@@ -116,42 +129,57 @@ export default function Tasks() {
     );
   }
 
+  const getAssigneeName = (str: string) => {
+    if (!str) return 'Unassigned';
+    if (str === '6bf900f2-84a8-4f3a-9f89-7eebadf12596') return 'Adv. Kumar';
+    return (str.length > 20 && str.includes('-')) ? 'Team Member' : str;
+  };
+
   const TaskCard = ({ task }: { task: AppTask }) => {
     return (
       <div 
-        draggable
-        onDragStart={(e) => e.dataTransfer.setData('taskId', task.id)}
-        className="cursor-move p-4 border rounded-lg bg-card shadow-sm hover:shadow-md transition-all group flex flex-col h-full animate-in fade-in slide-in-from-bottom-2"
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('taskId', task.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        className="cursor-grab active:cursor-grabbing p-4 border rounded-xl bg-card shadow-sm hover:shadow-md transition-all group flex flex-col animate-in fade-in slide-in-from-bottom-2"
       >
-        <div className="flex justify-between items-start mb-2">
+        <div className="flex justify-between items-start mb-3">
           <div className="flex gap-2 items-center">
-            <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${getStatusColor(task.status === 'Pending' && new Date(task.dueDate) < new Date() ? 'Overdue' : task.status)}`}>
+            <span className={`text-[9px] font-bold px-2 py-1 rounded border uppercase tracking-widest ${getStatusColor(task.status === 'Pending' && new Date(task.dueDate) < new Date() ? 'Overdue' : task.status)}`}>
               {task.status === 'Pending' && new Date(task.dueDate) < new Date() ? 'Overdue' : task.status}
             </span>
             <span className={`text-[10px] font-bold uppercase tracking-wider ${getPriorityColor(task.priority)}`}>
               {task.priority} Pri
             </span>
           </div>
-          {task.status !== 'Completed' && (
-             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => markComplete(task)}>
-               <CheckCircle2 className="h-4 w-4 text-muted-foreground hover:text-success" />
-             </Button>
-          )}
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={(e) => { e.stopPropagation(); if (confirm('Delete this task?')) deleteTaskMutation.mutate(task.id); }}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            {task.status !== 'Completed' && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => markComplete(task)}>
+                <CheckCircle2 className="h-4 w-4 text-muted-foreground hover:text-success" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={(e) => { e.stopPropagation(); if (confirm('Delete this task?')) deleteTaskMutation.mutate(task.id); }}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         
-        <h4 className="font-semibold text-sm leading-snug mb-1">{task.title}</h4>
+        <h4 className="font-semibold text-sm leading-snug mb-1.5">{task.title}</h4>
         {task.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{task.description}</p>}
-        {task.caseName && <p className="text-[10px] font-medium text-accent hover:underline cursor-pointer mb-3 truncate block border bg-accent/5 px-1.5 py-0.5 rounded-sm w-fit max-w-full">Case: {task.caseName}</p>}
+        {task.caseName && task.caseId && (
+          <Link to={`/cases/${task.caseId}`} className="text-[10px] font-medium text-accent hover:underline cursor-pointer mb-3 truncate block border bg-accent/5 px-2 py-1 rounded-md w-fit max-w-full">
+            Case: {task.caseName}
+          </Link>
+        )}
         
-        <div className="mt-auto pt-3 border-t flex justify-between items-center text-xs text-muted-foreground font-medium">
-          <span className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded">
-            <User className="h-3 w-3" /> {task.assignedTo}
+        <div className="mt-auto pt-3 border-t flex justify-between items-center text-[11px] text-muted-foreground font-medium">
+          <span className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md">
+            <User className="h-3.5 w-3.5" /> {getAssigneeName(task.assignedTo)}
           </span>
-          <span className={`flex items-center gap-1 ${new Date(task.dueDate) < new Date() && task.status !== 'Completed' ? 'text-destructive font-bold' : ''}`}>
-             <Clock className="h-3 w-3" /> {formatDate(task.dueDate, { month: 'short', day: 'numeric' })}
+          <span className={`flex items-center gap-1.5 ${new Date(task.dueDate) < new Date() && task.status !== 'Completed' ? 'text-destructive font-bold' : ''}`}>
+             <Clock className="h-3.5 w-3.5" /> {formatDate(task.dueDate, { month: 'short', day: 'numeric' })}
           </span>
         </div>
         
@@ -211,7 +239,7 @@ export default function Tasks() {
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Action Required</p>
-                  <p className="text-xl font-display font-bold text-destructive">{overdueTasks.length} <span className="text-sm font-medium">Overdue</span></p>
+                  <p className="text-xl font-display font-bold text-destructive">{overdueCount} <span className="text-sm font-medium">Overdue</span></p>
                 </div>
               </div>
               <div className="bg-white border rounded-lg p-3 shadow-sm">
@@ -225,75 +253,81 @@ export default function Tasks() {
         </div>
 
         {/* Kanban / Tasks Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
            
-           {/* Column 1: Overdue / Critical (status: Pending) */}
+           {/* Column 1: Critical */}
            <div 
-             className="space-y-4"
+             className="flex flex-col bg-muted/30 border rounded-xl overflow-hidden"
              onDragOver={handleDragOver}
+             onDragEnter={handleDragEnter}
+             onDrop={(e) => handleDrop(e, 'Overdue')}
+           >
+             <div className="flex items-center justify-between p-3 border-b bg-white/50">
+               <h3 className="font-bold text-sm text-foreground flex items-center gap-2"><AlertCircle className="h-4 w-4 text-destructive"/> Critical</h3>
+               <span className="bg-destructive/10 text-destructive text-[10px] font-bold px-2 py-0.5 rounded-full">{overdueTasks.length}</span>
+             </div>
+             <div className="flex-1 p-3 flex flex-col gap-3 min-h-[300px]">
+               {overdueTasks.length === 0 ? <p className="text-[11px] text-muted-foreground font-medium italic text-center py-6">All clear</p> : null}
+               {overdueTasks.map(t => <TaskCard key={t.id} task={t} />)}
+             </div>
+           </div>
+
+           {/* Column 2: Pending */}
+           <div 
+             className="flex flex-col bg-muted/30 border rounded-xl overflow-hidden"
+             onDragOver={handleDragOver}
+             onDragEnter={handleDragEnter}
              onDrop={(e) => handleDrop(e, 'Pending')}
            >
-             <div className="flex items-center justify-between border-b pb-2 border-destructive/20">
-               <h3 className="font-bold text-sm text-destructive flex items-center gap-1.5"><AlertCircle className="h-4 w-4"/> Critical / Delayed</h3>
-               <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded-full">{overdueTasks.length}</span>
+             <div className="flex items-center justify-between p-3 border-b bg-white/50">
+               <h3 className="font-bold text-sm text-foreground flex items-center gap-2"><ListTodo className="h-4 w-4 text-slate-500"/> To-Do Pipeline</h3>
+               <span className="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{pendingTasks.length}</span>
              </div>
-             <div className="space-y-3">
-               {overdueTasks.length === 0 ? <p className="text-xs text-muted-foreground italic text-center py-4 bg-muted/20 border-dashed border rounded">All clear</p> : null}
-               {overdueTasks.map(t => <TaskCard key={t.id} task={t} />)}
+             <div className="flex-1 p-3 flex flex-col gap-3 min-h-[300px]">
+               {pendingTasks.length === 0 ? <p className="text-[11px] text-muted-foreground font-medium italic text-center py-6">Queue empty</p> : null}
+               {pendingTasks.map(t => <TaskCard key={t.id} task={t} />)}
              </div>
            </div>
 
            {/* Column 2: In Progress */}
            <div 
-             className="space-y-4"
+             className="flex flex-col bg-muted/30 border rounded-xl overflow-hidden"
              onDragOver={handleDragOver}
+             onDragEnter={handleDragEnter}
              onDrop={(e) => handleDrop(e, 'In Progress')}
            >
-             <div className="flex items-center justify-between border-b pb-2 border-blue-200">
-               <h3 className="font-bold text-sm text-blue-700 flex items-center gap-1.5"><Clock className="h-4 w-4"/> In Progress</h3>
-               <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{inProgressTasks.length}</span>
+             <div className="flex items-center justify-between p-3 border-b bg-white/50">
+               <h3 className="font-bold text-sm text-foreground flex items-center gap-2"><Clock className="h-4 w-4 text-blue-500"/> In Progress</h3>
+               <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{inProgressTasks.length}</span>
              </div>
-             <div className="space-y-3">
-               {inProgressTasks.length === 0 ? <p className="text-xs text-muted-foreground italic text-center py-4 bg-muted/20 border-dashed border rounded">Nothing active</p> : null}
+             <div className="flex-1 p-3 flex flex-col gap-3 min-h-[300px]">
+               {inProgressTasks.length === 0 ? <p className="text-[11px] text-muted-foreground font-medium italic text-center py-6">Nothing active</p> : null}
                {inProgressTasks.map(t => <TaskCard key={t.id} task={t} />)}
              </div>
            </div>
 
-           {/* Column 3: Pending */}
-           <div 
-             className="space-y-4"
-             onDragOver={handleDragOver}
-             onDrop={(e) => handleDrop(e, 'Pending')}
-           >
-             <div className="flex items-center justify-between border-b pb-2 border-slate-200">
-               <h3 className="font-bold text-sm text-slate-700 flex items-center gap-1.5"><ListTodo className="h-4 w-4"/> To-Do Pipeline</h3>
-               <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2 py-0.5 rounded-full">{pendingTasks.length}</span>
-             </div>
-             <div className="space-y-3">
-               {pendingTasks.length === 0 ? <p className="text-xs text-muted-foreground italic text-center py-4 bg-muted/20 border-dashed border rounded">Queue empty</p> : null}
-               {pendingTasks.map(t => <TaskCard key={t.id} task={t} />)}
-             </div>
-           </div>
+
 
            {/* Column 4: Recently Completed */}
            <div 
-             className="space-y-4 md:col-span-full xl:col-span-1 border-t xl:border-t-0 xl:border-l pt-6 xl:pt-0 xl:pl-6"
+             className="md:col-span-full xl:col-span-1 flex flex-col bg-muted/30 border rounded-xl overflow-hidden"
              onDragOver={handleDragOver}
+             onDragEnter={handleDragEnter}
              onDrop={(e) => handleDrop(e, 'Completed')}
            >
-             <div className="flex items-center justify-between border-b pb-2 border-emerald-200">
-               <h3 className="font-bold text-sm text-emerald-700 flex items-center gap-1.5"><Archive className="h-4 w-4"/> Recently Finished</h3>
-               <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">{completedTasks.length}</span>
+             <div className="flex items-center justify-between p-3 border-b bg-white/50">
+               <h3 className="font-bold text-sm text-foreground flex items-center gap-2"><Archive className="h-4 w-4 text-emerald-500"/> Finished</h3>
+               <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{completedTasks.length}</span>
              </div>
-             <div className="space-y-3 opacity-70">
-               {completedTasks.length === 0 ? <p className="text-xs text-muted-foreground italic text-center py-4 bg-muted/20 border-dashed border rounded">No closed tasks</p> : null}
+             <div className="flex-1 p-3 flex flex-col gap-3 min-h-[300px]">
+               {completedTasks.length === 0 ? <p className="text-[11px] text-muted-foreground font-medium italic text-center py-6">No closed tasks</p> : null}
                {completedTasks.map(t => (
-                 <div key={t.id} className="p-3 border rounded-lg bg-emerald-50/30 flex items-start gap-2">
+                 <div key={t.id} className="p-3 border rounded-xl bg-white shadow-sm flex items-start gap-2 opacity-80">
                    <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
                    <div>
-                     <p className="text-xs font-semibold line-through">{t.title}</p>
-                     <p className="text-[9px] font-bold text-muted-foreground uppercase mt-1">
-                       Closed by {t.assignedTo} on {new Date(t.completedAt!).toLocaleDateString()}
+                     <p className="text-xs font-semibold line-through text-muted-foreground">{t.title}</p>
+                     <p className="text-[9px] font-bold text-muted-foreground/60 uppercase mt-1">
+                       {getAssigneeName(t.assignedTo)} • {new Date(t.completedAt!).toLocaleDateString()}
                      </p>
                    </div>
                  </div>

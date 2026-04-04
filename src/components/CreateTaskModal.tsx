@@ -43,6 +43,7 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
   const [caseId, setCaseId] = useState("");
   const [assigneeUuid, setAssigneeUuid] = useState(TEAM_MEMBERS[0].uuid);
   const [priority, setPriority] = useState<TaskPriority>("Medium");
+  const [status, setStatus] = useState<TaskStatus>("Pending");
   const [dueDate, setDueDate] = useState("");
   const queryClient = useQueryClient();
 
@@ -65,6 +66,7 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
       setCaseId("");
       setAssigneeUuid(TEAM_MEMBERS[0].uuid);
       setPriority("Medium");
+      setStatus("Pending");
       setDueDate("");
       
       onComplete();
@@ -88,7 +90,7 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
       case_id: caseId === "none" ? null : (caseId || null),
       assigned_to: assigneeUuid,
       created_by: TEAM_MEMBERS[0].uuid, // logged-in user UUID
-      status: "Pending",
+      status,
       priority,
       due_date: new Date(dueDate).toISOString(),
     };
@@ -161,13 +163,29 @@ export function CreateTaskModal({ open, onOpenChange, onComplete }: CreateTaskMo
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Due Date *</Label>
-            <Input 
-              type="date"
-              value={dueDate} 
-              onChange={e => setDueDate(e.target.value)} 
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Due Date *</Label>
+              <Input 
+                type="date"
+                value={dueDate} 
+                onChange={e => setDueDate(e.target.value)} 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select value={status} onValueChange={(val: any) => setStatus(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Status..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="In Progress">In Progress</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="Overdue">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <Button type="submit" className="w-full" disabled={taskMutation.isPending}>

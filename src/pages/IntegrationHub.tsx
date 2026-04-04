@@ -23,12 +23,12 @@ export default function IntegrationHub() {
 
   const { data: integrations = [], isLoading: loadingIntegrations } = useQuery({
     queryKey: ['integrations'],
-    queryFn: integrationService.getIntegrations
+    queryFn: () => integrationService.getIntegrations()
   });
 
   const { data: syncLogs = [], isLoading: loadingLogs } = useQuery({
     queryKey: ['sync-logs'],
-    queryFn: integrationService.getSyncLogs
+    queryFn: () => integrationService.getSyncLogs()
   });
 
   const isLoading = loadingIntegrations || loadingLogs;

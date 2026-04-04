@@ -41,7 +41,7 @@ export function SendCommunicationModal({ open, onOpenChange, caseId: initialCase
 
   const { data: clientsResponse } = useQuery({
     queryKey: ['clients'],
-    queryFn: clientService.getAllClients,
+    queryFn: () => clientService.getAllClients(1, 1000),
     enabled: open
   });
   const clients = clientsResponse?.data || [];

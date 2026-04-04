@@ -9,22 +9,22 @@ import {
 } from 'recharts';
 
 export default function Analytics() {
-  const { data: performance, isLoading: loadingPerf } = useQuery({
-    queryKey: ['firm-performance'],
-    queryFn: reportService.getFirmPerformance
+  const { data: performance, isLoading: loadingPerformance } = useQuery({ 
+    queryKey: ['firm-performance'], 
+    queryFn: () => reportService.getFirmPerformance() 
+  });
+  
+  const { data: cases = [], isLoading: loadingCases } = useQuery({ 
+    queryKey: ['cases-stats'], 
+    queryFn: () => reportService.getCaseStats() 
+  });
+  
+  const { data: revenueTrend = [], isLoading: loadingTrend } = useQuery({ 
+    queryKey: ['revenue-trend'], 
+    queryFn: () => reportService.getRevenueTrend() 
   });
 
-  const { data: cases = [], isLoading: loadingCases } = useQuery({
-    queryKey: ['cases-stats'],
-    queryFn: reportService.getCaseStats
-  });
-
-  const { data: revenueTrend = [], isLoading: loadingTrend } = useQuery({
-    queryKey: ['revenue-trend'],
-    queryFn: reportService.getRevenueTrend
-  });
-
-  const isLoading = loadingPerf || loadingCases || loadingTrend;
+  const isLoading = loadingPerformance || loadingCases || loadingTrend;
 
   // Process data for charts
   const caseTypeData = cases.reduce((acc: any[], curr) => {

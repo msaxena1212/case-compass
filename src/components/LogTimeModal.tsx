@@ -31,7 +31,7 @@ export function LogTimeModal({ isOpen, onClose, onSuccess }: LogTimeModalProps) 
   // Fetch cases to select from
   const { data: casesResponse, isLoading: loadingCases } = useQuery({
     queryKey: ['cases'],
-    queryFn: caseService.getAllCases,
+    queryFn: () => caseService.getAllCases(1, 1000),
     enabled: isOpen
   });
   const cases = casesResponse?.data || [];

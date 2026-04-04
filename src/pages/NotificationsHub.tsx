@@ -50,50 +50,8 @@ export default function NotificationsHub() {
     queryFn: () => communicationService.getCommunicationLogs(logPage, pageSize)
   });
 
-  const mutation = useMutation({
-    mutationFn: (notif: any) => communicationService.createNotification(notif),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      toast.success("Sample notification generated!");
-    },
-    onError: (err: any) => {
-      toast.error(`Generation failed: ${err.message}`);
-    }
-  });
+  // Mutation and generateSample removed as requested
 
-  const generateSample = () => {
-    if (!user) {
-      toast.error("User context missing");
-      return;
-    }
-
-    const samples = [
-      {
-        userId: user.id,
-        title: "Upcoming Hearing",
-        message: "You have a hearing for 'Union of India vs XYZ Corp' in Delhi High Court tomorrow at 10:30 AM.",
-        type: "Hearing",
-        actionUrl: "/calendar"
-      },
-      {
-        userId: user.id,
-        title: "Invoice Overdue",
-        message: "Invoice INV-2026-004 for 'Reliance Industries' is now 5 days overdue.",
-        type: "Billing",
-        actionUrl: "/billing"
-      },
-      {
-        userId: user.id,
-        title: "New Task Assigned",
-        message: "A new research task 'Precedents for Sec 138' has been assigned to you by Partner.",
-        type: "Task",
-        actionUrl: "/tasks"
-      }
-    ];
-
-    const randomSample = samples[Math.floor(Math.random() * samples.length)];
-    mutation.mutate(randomSample);
-  };
 
   const notifications = notificationResponse?.data || [];
   const totalNotifications = notificationResponse?.totalCount || 0;
@@ -130,6 +88,41 @@ export default function NotificationsHub() {
     }
   };
 
+  const handleExportText = () => {
+    const activeTab = document.querySelector('[data-state="active"]')?.getAttribute('value') || 'notifications';
+    let text = `Case Compass - ${activeTab === 'notifications' ? 'Notifications' : 'Communication Logs'} Export\n`;
+    text += `Generated: ${new Date().toLocaleString()}\n`;
+    text += `--------------------------------------------------\n\n`;
+
+    if (activeTab === 'notifications') {
+      filteredNotifications.forEach(n => {
+        text += `[${new Date(n.timestamp).toLocaleString()}] ${n.title}\n`;
+        text += `Type: ${n.type} | Channel: ${n.channel} | Status: ${n.status}\n`;
+        text += `Message: ${n.message}\n`;
+        text += `--------------------------------------------------\n`;
+      });
+    } else {
+      communicationLogs.forEach(log => {
+        text += `[${new Date(log.timestamp).toLocaleString()}] To: ${log.receiver}\n`;
+        text += `Type: ${log.type} | Channel: ${log.channel} | Status: ${log.status}\n`;
+        text += `Summary: ${log.summary}\n`;
+        text += `Notes: ${log.notes || 'N/A'}\n`;
+        text += `--------------------------------------------------\n`;
+      });
+    }
+
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `case_compass_export_${activeTab}_${new Date().toISOString().slice(0,10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Text report exported successfully!");
+  };
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -152,11 +145,10 @@ export default function NotificationsHub() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={generateSample} disabled={mutation.isPending} variant="outline" className="gap-2 border-dashed border-accent/40 hover:bg-accent/5 text-accent font-bold">
-              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Generate Sample
+            <Button variant="outline" className="gap-2 bg-white font-bold h-10 border-border/60 hover:bg-muted/50" onClick={handleExportText}>
+              <FileText className="h-4 w-4 text-accent" /> Export Text
             </Button>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2 h-10 border-border/60">
               <Filter className="h-4 w-4" /> Export Logs
             </Button>
           </div>

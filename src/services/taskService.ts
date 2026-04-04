@@ -76,21 +76,31 @@ export const taskService = {
   },
 
   async updateTaskStatus(id: string, status: AppTask['status']) {
+    const updatePayload: any = { status };
+    if (status === 'Completed') {
+      updatePayload.completed_at = new Date().toISOString();
+    } else {
+      updatePayload.completed_at = null; // reset if moved back
+    }
+
     const { data, error } = await supabase
       .from('tasks')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Task update error", error);
+      throw error;
+    }
     return data as AppTask;
   },
 
   async updateTask(id: string, updates: Partial<{ title: string; description: string; priority: string; due_date: string; status: string }>) {
     const { data, error } = await supabase
       .from('tasks')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', id)
       .select()
       .single();

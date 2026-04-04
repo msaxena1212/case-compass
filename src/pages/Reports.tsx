@@ -18,7 +18,7 @@ import { billingService } from "@/services/billingService";
 import { clientService } from "@/services/clientService";
 import { courtService } from "@/services/courtService";
 import { toast } from "sonner";
-import { generateLegalContent } from "@/lib/gemini";
+import { generateLegalContent, generateTrendAnalysis } from "@/lib/gemini";
 import { exportToPDF, exportToExcel } from "@/utils/exportUtils";
 import { Briefcase, DollarSign, ShieldCheck } from "lucide-react";
 
@@ -101,12 +101,11 @@ export default function Reports() {
     if (reportData.length === 0) return;
     setIsGenerating(true);
     try {
-      const prompt = `Analyze this legal ${selectedType} data and provide a concise 2-sentence strategic insight for the firm owner:\n${JSON.stringify(reportData.slice(0, 10))}`;
-      const insight = await generateLegalContent(prompt);
+      const insight = await generateTrendAnalysis(selectedType, reportData);
       setAiInsight(insight);
-      toast.success("AI Insights generated!");
+      toast.success("Strategic trend analysis completed successfully!");
     } catch (e) {
-      toast.error("Failed to generate AI insights");
+      toast.error("AI service is currently busy. Please try again.");
     } finally {
       setIsGenerating(false);
     }

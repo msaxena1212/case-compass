@@ -30,7 +30,7 @@ export default function CreateCase() {
   
   const { data: clientsResponse, isLoading: loadingClients } = useQuery({
     queryKey: ['clients'],
-    queryFn: clientService.getAllClients
+    queryFn: () => clientService.getAllClients(1, 1000)
   });
   const clients = clientsResponse?.data || [];
 

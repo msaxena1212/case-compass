@@ -158,3 +158,25 @@ export async function analyzeLegalRisk(text: string) {
   const prompt = `Analyze the following contract for potential legal risks. List each risk with its severity (High/Medium/Low) and a suggested mitigation strategy. Format as JSON:\n\n${text}`;
   return generateLegalContent(prompt);
 }
+
+export async function generateTrendAnalysis(type: string, data: any[]) {
+  const prompt = `Act as a senior legal management consultant. Analyze the following "${type}" data for a law firm. 
+  Identify 3-4 key strategic trends, growth opportunities, or risk factors based on frequencies, dates, and amounts.
+  
+  Format your response in Markdown with these EXACT sections:
+  ### Strategic Verdict
+  (A bold 1-sentence overview)
+  
+  ### Key Analysis Points
+  - **[Topic]**: [Insight]
+  - **[Topic]**: [Insight]
+  - **[Topic]**: [Insight]
+  
+  ### Recommended Action
+  (A concise professional recommendation for the firm partner)
+
+  Data provided for analysis:
+  ${JSON.stringify(data.slice(0, 25))}
+  `;
+  return generateLegalContent(prompt);
+}

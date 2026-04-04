@@ -46,16 +46,43 @@ export function ReportPreview({ type, data, isLoading, aiInsights }: ReportPrevi
   return (
     <div className="space-y-6">
       {aiInsights && (
-        <Card className="border-accent/20 bg-accent/5 overflow-hidden">
-          <div className="h-1 bg-gradient-to-r from-accent via-primary to-accent" />
-          <CardContent className="p-4 flex gap-3">
-            <Sparkles className="h-5 w-5 text-accent shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-accent mb-1 flex items-center gap-2">
-                AI Strategic Insight
-                <Badge variant="outline" className="text-[8px] h-4 border-accent text-accent">Ollama GLM-5</Badge>
-              </p>
-              <p className="text-sm leading-relaxed text-foreground/80 italic">{aiInsights}</p>
+        <Card className="border-none shadow-xl bg-gradient-to-br from-accent/10 via-background to-primary/5 overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent via-primary to-accent opacity-70" />
+          <div className="absolute -right-12 -top-12 w-32 h-32 bg-accent/10 rounded-full blur-3xl" />
+          <div className="absolute -left-12 -bottom-12 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
+          
+          <CardContent className="p-6 relative">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-accent/20 flex items-center justify-center text-accent shadow-inner">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-display font-bold tracking-tight text-foreground">Strategic Intelligence</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent/80">AI-Powered Trend Analysis</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground">
+              {aiInsights.split('\n').map((line, i) => {
+                if (line.startsWith('###')) {
+                  return <h3 key={i} className="text-sm font-bold text-foreground mt-4 mb-2 flex items-center gap-2">
+                    {line.includes('Verdict') && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
+                    {line.replace('###', '').trim()}
+                  </h3>
+                }
+                if (line.startsWith('-')) {
+                  return <div key={i} className="flex gap-3 text-sm text-muted-foreground mb-1 ml-2">
+                    <span className="text-accent mt-1">•</span>
+                    <span>{line.replace('-', '').trim()}</span>
+                  </div>
+                }
+                if (line.trim()) {
+                  return <p key={i} className="text-sm text-muted-foreground leading-relaxed">{line}</p>
+                }
+                return null;
+              })}
             </div>
           </CardContent>
         </Card>

@@ -14,7 +14,17 @@ export const communicationService = {
 
     if (error) throw error;
     return { 
-      data: data as AppNotification[],
+      data: (data || []).map(n => ({
+        id: n.id,
+        userId: n.user_id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        channel: n.channel || 'In-App',
+        status: n.read ? 'Read' : 'Unread',
+        actionUrl: n.link,
+        timestamp: n.created_at
+      })) as AppNotification[],
       totalCount: count || 0
     };
   },
